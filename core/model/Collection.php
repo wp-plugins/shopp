@@ -581,8 +581,10 @@ class ProductTaxonomy extends ProductCollection {
 
 		$loaded =  parent::load( apply_filters('shopp_taxonomy_load_options', $options) );
 
-		$query = "SELECT (AVG(maxprice)+AVG(minprice))/2 AS average,MAX(maxprice) AS max,MIN(IF(minprice>0,minprice,NULL)) AS min FROM $summary_table " . str_replace('p.ID', 'product', join(' ', $options['joins']));
-		$this->pricing = sDB::query($query);
+		if ( 'auto' == $this->pricerange ) {
+			$query = "SELECT (AVG(maxprice)+AVG(minprice))/2 AS average,MAX(maxprice) AS max,MIN(IF(minprice>0,minprice,NULL)) AS min FROM $summary_table " . str_replace('p.ID', 'product', join(' ', $options['joins']));
+			$this->pricing = sDB::query($query);
+		}
 
 		return $loaded;
 	}
@@ -747,15 +749,12 @@ class ProductTaxonomy extends ProductCollection {
 
 	public function pagelink ( $page ) {
 		global $wp_rewrite;
-		$categoryurl = get_term_link($this->slug, $this->taxonomy);
 
 		$alpha = ( false !== preg_match('/([A-Z]|0\-9)/', $page) );
-		$prettyurl = trailingslashit($categoryurl) . ($page > 1 || $alpha ? "page/$page" : "");
+		$base = shopp($this, 'get-url');
 
-		$queryvars = array($this->taxonomy => $this->slug);
-		if ( $page > 1 || $alpha ) $queryvars['paged'] = $page;
-
-		$url = $wp_rewrite->using_permalinks() ? user_trailingslashit($prettyurl) : add_query_arg($queryvars, $categoryurl);
+		if ( (int) $page > 1 || $alpha )
+	        $url = $wp_rewrite->using_permalinks() ? user_trailingslashit( trailingslashit($base) . "page/$page") : add_query_arg('paged', $page, $base);
 
 		return apply_filters('shopp_paged_link', $url, $page);
 	}
@@ -1151,22 +1150,22 @@ class ProductCategory extends ProductTaxonomy {
 	 * @param array $options Named array for WP get_terms
 	 * @return boolean successfully loaded or not
 	 **/
-	public function load_children ( $options=array() ) {
+	public function load_children ( array $options = array() ) {
+
 		if ( empty($this->id) ) return false;
 
 		$taxonomy = self::$taxon;
 		$categories = array(); $count = 0;
-		$args = array_merge($options, array('child_of' => $this->id, 'fields' => 'id=>parent'));
-		$terms = get_terms( $taxonomy, $args );
-		$children = _get_term_hierarchy($taxonomy);
-		ProductCategory::tree($taxonomy, $terms, $children, $count, $categories, 1, 0, $this->id);
+		$options = array_merge($options, array('child_of' => $this->id, 'fields' => 'all'));
+		$terms = get_terms( $taxonomy, $options );
+
 		$this->children = array();
-		foreach ( $categories as $id => $childterm ) {
-			$this->children[ $id ] = new ProductCategory($id);
-			$this->children[ $id ]->populate($childterm);
+		foreach ( $terms as $term ) {
+			$this->children[ $term->term_id ] = new ProductCategory($term->term_id);
+			$this->children[ $term->term_id ]->populate($term);
 		}
 
-		return !empty($this->children);
+		return ( ! empty($this->children) );
 
 	}
 
@@ -1282,7 +1281,7 @@ class ProductCategory extends ProductTaxonomy {
 	public function save_imageorder ($ordering) {
 		$table = ShoppDatabaseObject::tablename(CategoryImage::$table);
 		foreach ($ordering as $i => $id)
-			sDB::query("UPDATE LOW_PRIORITY $table SET sortorder='$i' WHERE (id='$id' AND parent='$this->id' AND context='category' AND type='image')");
+			sDB::query("UPDATE $table SET sortorder='$i' WHERE (id='$id' AND parent='$this->id' AND context='category' AND type='image')");
 		return true;
 	}
 
@@ -1328,7 +1327,7 @@ class ProductCategory extends ProductTaxonomy {
 			$imagesets .= (!empty($imagesets)?" OR ":"");
 			$imagesets .= "((context='category' AND parent='$this->id' AND id='$image') OR (context='image' AND parent='$image'))";
 		}
-		sDB::query("DELETE LOW_PRIORITY FROM $imagetable WHERE type='image' AND ($imagesets)");
+		sDB::query("DELETE FROM $imagetable WHERE type='image' AND ($imagesets)");
 		return true;
 	}
 
@@ -1483,8 +1482,11 @@ class SmartCollection extends ProductCollection {
 
 		$this->slug = $this->uri = $slugs[0];
 
-		$this->smart($options);
+		$this->name = call_user_func(array($thisclass, 'name'));
+	}
 
+	public static function name () {
+		return Shopp::__('Collection');
 	}
 
 	public static function slugs ( string $class ) {
@@ -1492,7 +1494,7 @@ class SmartCollection extends ProductCollection {
 	}
 
 	public function load ( array $options = array() ) {
-		$this->loading = array_merge($this->loading, $options);
+		$this->smart($options);
 		parent::load($this->loading);
 	}
 
@@ -1523,8 +1525,11 @@ class CatalogProducts extends SmartCollection {
 
 	public static $slugs = array('catalog');
 
+	public static function name () {
+		return Shopp::__('Catalog Products');
+	}
+
 	public function smart ( array $options = array() ) {
-		$this->name = __('Catalog Products', 'Shopp');
 		if ( isset($options['order']) )
 			$this->loading['order'] = $options['order'];
 	}
@@ -1550,8 +1555,11 @@ class NewProducts extends SmartCollection {
 
 	public static $slugs = array('new');
 
+	public static function name () {
+		return Shopp::__('New Products');
+	}
+
 	public function smart ( array $options = array() ) {
-		$this->name = __('New Products', 'Shopp');
 		$this->loading = array('order' => 'newest');
 		if ( isset($options['columns']) )
 			$this->loading['columns'] = $options['columns'];
@@ -1570,8 +1578,11 @@ class FeaturedProducts extends SmartCollection {
 
 	public static $slugs = array('featured');
 
+	public static function name () {
+		return Shopp::__('Featured Products');
+	}
+
 	public function smart ( array $options = array() ) {
-		$this->name = __('Featured Products','Shopp');
 		$this->loading = array(
 			'where' => array("s.featured='on'"),
 			'order'=>'newest'
@@ -1596,8 +1607,11 @@ class OnSaleProducts extends SmartCollection {
 
 	public static $slugs = array('onsale');
 
+	public static function name () {
+		return Shopp::__('On Sale');
+	}
+
 	public function smart ( array $options = array() ) {
-		$this->name = __('On Sale','Shopp');
 		$this->loading = array(
 			'where' => array("s.sale='on'"),
 			'order' => 'p.post_modified DESC'
@@ -1626,9 +1640,12 @@ class BestsellerProducts extends SmartCollection {
 
 	public static $slugs = array('bestsellers', 'bestseller', 'bestselling');
 
-	public function smart ( array $options = array() ) {
-		$this->name = __('Bestsellers', 'Shopp');
 
+	public static function name () {
+		return Shopp::__('Bestsellers');
+	}
+
+	public function smart ( array $options = array() ) {
 		if ( isset($options['range']) && is_array($options['range']) ) {
 			$start = $options['range'][0];
 			$end = $options['range'][1];
@@ -1677,10 +1694,16 @@ class SearchResults extends SmartCollection {
 	public function __construct ( array $options = array() ) {
 		parent::__construct($options);
 		add_filter('shopp_themeapi_collection_url', array($this, 'url'), 10, 3);
+
+		$options['search'] = empty($options['search']) ? '' : stripslashes($options['search']);
+		$this->search = $options['search'];
+	}
+
+	public static function name () {
+		 return Shopp::__('Search Results');
 	}
 
 	public function smart ( array $options = array() ) {
-		$options['search'] = empty($options['search']) ? '' : stripslashes($options['search']);
 
 		// $this->loading['debug'] = true;
 		// Load search engine components
@@ -1688,11 +1711,10 @@ class SearchResults extends SmartCollection {
 		new BooleanParser;
 		new ShortwordParser;
 
-		// Sanitize the search string
-		$search = $options['search'];
-		$this->search = $search;
-
+		$search = $this->search;
 		if ( ShoppStorefront() ) ShoppStorefront()->search = $search;
+
+		// Sanitize the search string
 
 		// Price matching
 		$prices = SearchParser::PriceMatching($search);
@@ -1772,10 +1794,14 @@ class MixProducts extends SmartCollection {
 	public static $slugs = array('mixed');
 	public static $_menu = false;
 
+	public static function name () {
+		return Shopp::__('Mixed Products');
+	}
+
 	public function smart ( array $options = array() ) {
 
 		$defaults = array(
-			'name' => __('Mixed Products','Shopp'),
+			'name' => self::name(),
 			'relation' => 'AND',
 			'field' => 'name',
 			'include_children' => true,
@@ -1830,8 +1856,12 @@ class TagProducts extends SmartCollection {
 	public static $slugs = array('tag');
 	static $_menu = false;
 
+	public static function name () {
+		return Shopp::__('Tagged Products');
+	}
+
 	public function smart ( array $options = array() ) {
-		if (!isset($options['tag'])) {
+		if ( ! isset($options['tag'])) {
 			new ShoppError('No tag option provided for the requested TagProducts collection','doing_it_wrong',SHOPP_DEBUG_ERR);
 			return false;
 		}
@@ -1897,6 +1927,10 @@ class RelatedProducts extends SmartCollection {
 	public static $slugs = array('related');
 	public static $_menu = false;
 	public $product = false;
+
+	public static function name () {
+		return Shopp::__('Related Products');
+	}
 
 	public function smart ( array $options = array() ) {
 		$where = array();
@@ -1978,6 +2012,10 @@ class AlsoBoughtProducts extends SmartCollection {
 	public static $_menu = false;
 	public $product = false;
 
+	public static function name () {
+		return Shopp::__('Also Bought Products');
+	}
+
 	public function smart ( array $options = array() ) {
 		$this->name = __('Customers also bought&hellip;','Shopp');
 		$this->controls = false;
@@ -2050,8 +2088,11 @@ class RandomProducts extends SmartCollection {
 
 	public static $slugs = array('random');
 
+	public static function name () {
+		return Shopp::__('Random Products');
+	}
+
 	public function smart ( array $options = array() ) {
-		$this->name = __('Random Products','Shopp');
 
 		if ( isset($options['order']) && 'chaos' == strtolower($options['order']) )
 
@@ -2085,10 +2126,13 @@ class ViewedProducts extends SmartCollection {
 
 	public static $slugs = array('viewed');
 
+	public static function name () {
+		return Shopp::__('Recently Viewed');
+	}
+
 	public function smart ( array $options = array() ) {
 		$Storefront = ShoppStorefront();
 		$viewed = isset($Storefront->viewed) ? array_filter($Storefront->viewed) : array();
-		$this->name = __('Recently Viewed','Shopp');
 		$this->loading = array();
 		if ( empty($viewed) ) $this->loading['where'] = 'true=false';
 		$this->loading['where'] = array("p.id IN (" . join(',', $viewed) . ")");
@@ -2108,6 +2152,10 @@ class PromoProducts extends SmartCollection {
 	public static $slugs = array('promo');
 
 	public static $_menu = false;
+
+	public static function name () {
+		return Shopp::__('Promotional Products');
+	}
 
 	public function smart ( array $options = array() ) {
 		$id = urldecode($options['id']);

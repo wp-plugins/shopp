@@ -85,7 +85,7 @@ class ShoppShiprates extends ListFramework {
 		if ( ! $Item->shippable ) return; // Don't track the item
 
 		$this->shippable[ $Item->id ] = $Item->shipsfree;
-		$this->fees[ $Item->id ] = $Item->fees;
+		$this->fees[ $Item->id ] = ($Item->fees * $Item->quantity);
 
 	}
 
@@ -118,7 +118,7 @@ class ShoppShiprates extends ListFramework {
 	 * @return float The shipping fee amount
 	 **/
 	public function fees () {
-		return (float)shopp_setting('order_shipfee') + array_sum($this->fees);
+		return (float) apply_filters('shopp_shipping_fees', shopp_setting('order_shipfee') + array_sum($this->fees) );
 	}
 
 	/**
@@ -292,9 +292,13 @@ class ShoppShiprates extends ListFramework {
 
 		if ( empty($services) ) return false; // Still no rates, bail
 
-		// Suppress new errors from shipping systems if there are servicess available
+		// Suppress new errors from shipping systems if there are services available
 		$newnotices = $Notices->count() - $notices;
 		if ( $newnotices > 0 ) $Notices->rollback($newnotices);
+
+		// Add all order shipping fees and item shipping fees
+		foreach ( $services as $service )
+			$service->amount += $this->fees();
 
 		parent::clear();
 		$this->populate($services);

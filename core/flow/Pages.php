@@ -197,7 +197,7 @@ class ShoppPage {
 		$title = apply_filters('shopp_' . get_class_property($classname, 'name') . '_pagetitle', $this->title); // @deprecated Use shopp_storefront_page_title or shopp_{$name}_storefront_page_title instead
 
 		$title = apply_filters('shopp_' . get_class_property($classname, 'name') . '_storefront_page_title', $title);
-		return $title = apply_filters('shopp_storefront_page_title', $title);
+		return apply_filters('shopp_storefront_page_title', $title);
 	}
 
 	public function slug () {
@@ -248,6 +248,7 @@ class ShoppPage {
 		$stub = new WPDatabaseObject;
 		$stub->init('posts');
 		$stub->ID = 0;
+		$stub->post_name = '';
 		$stub->comment_status = 'closed'; // Force comments closed
 		$stub->post_title = $this->title;
 		$stub->post_content = '';
@@ -292,6 +293,13 @@ class ShoppCatalogPage extends ShoppPage {
 		parent::__construct($options);
 	}
 
+	public function templates () {
+		$templates = parent::templates();
+		if ( is_catalog_frontpage() )
+			array_unshift($templates, 'front-page.php');
+		return $templates;
+	}
+
 	public function content ($content) {
 		global $wp_query;
 		// Test that this is the main query and it is a catalog page
@@ -311,12 +319,21 @@ class ShoppCatalogPage extends ShoppPage {
 		return self::FRONTPAGE;
 	}
 
+	public function styleclass ( $classes ) {
+		if ( is_catalog_frontpage() )
+			$classes[] = 'home';
+		$classes[] = $this->name();
+		return $classes;
+	}
+
 	public function poststub () {
 		global $wp_query;
 		if ( ! $wp_query->is_main_query() ) return;
 
 		$stub = parent::poststub();
 		$wp_query->is_post_type_archive = false;
+		// if ( is_catalog_frontpage() )
+		// 	$wp_query->is_home = true;
 
 		return $stub;
 	}
@@ -359,34 +376,34 @@ class ShoppAccountPage extends ShoppPage {
 	}
 
 	public function content ($content, $request=false) {
-		if ( ! $request) {
+		if ( ! $request ) {
 			global $wp_query;
 			// Test that this is the main query and it is the account page
 			if ( ! $wp_query->is_main_query() || ! is_shopp_page('account') ) return $content;
 		}
 
-		$widget = ('widget' == $request);
+		$widget = ( 'widget' === $request );
 		if ($widget) $request = 'menu'; // Modify widget request to render the account menu
 
-		if ('none' == shopp_setting('account_system'))
-			return apply_filters('shopp_account_template', shopp('customer', 'get-order-lookup'));
+		if ( 'none' == shopp_setting('account_system' ) )
+			return apply_filters( 'shopp_account_template', shopp( 'customer', 'get-order-lookup' ) );
 
 		// $download_request = get_query_var('s_dl');
 		if ( ! $request) $request = ShoppStorefront()->account['request'];
-		$templates = array('account-'.$request.'.php', 'account.php');
+		$templates = array( 'account-'.$request.'.php', 'account.php' );
 
-		if ('login' == $request || !ShoppCustomer()->loggedin()) $templates = array('login.php');
+		if ( 'login' == $request || ! ShoppCustomer()->loggedin() ) $templates = array( 'login-' . $request . '.php', 'login.php' );
 
 		ob_start();
-		if ( apply_filters('shopp_show_account_errors', true) && ShoppErrors()->exist(SHOPP_AUTH_ERR) )
-			echo ShoppStorefront::errors(array("errors-$context", 'account-errors.php', 'errors.php'));
-		locate_shopp_template($templates, true);
+		if ( apply_filters( 'shopp_show_account_errors', true ) && ShoppErrors()->exist( SHOPP_AUTH_ERR ) )
+			echo ShoppStorefront::errors( array( "errors-$context", 'account-errors.php', 'errors.php' ) );
+		Shopp::locate_template( $templates, true );
 		$content = ob_get_clean();
 
 		// Suppress the #shopp div for sidebar widgets
-		if ($widget) $content = '<!-- id="shopp" -->'.$content;
+		if ($widget) $content = '<!-- id="shopp" -->' . $content;
 
-		return apply_filters('shopp_account_template', $content);
+		return apply_filters( 'shopp_account_template', $content );
 
 	}
 
@@ -434,6 +451,7 @@ class ShoppAccountPage extends ShoppPage {
 		$_[] = 'From: ' . Shopp::email_from( shopp_setting('merchant_email'), shopp_setting('business_name') );
 		$_[] = 'To: '.$RecoveryCustomer->email;
 		$_[] = 'Subject: '.$subject;
+		$_[] = 'Content-type: text/html';
 		$_[] = '';
 		$_[] = '<p>'.__('A request has been made to reset the password for the following site and account:', 'Shopp').'<br />';
 		$_[] = get_option('siteurl').'</p>';
@@ -851,9 +869,75 @@ class ShoppCollectionPage extends ShoppPage {
 		parent::__construct($settings);
 	}
 
+	public function filters () {
+		parent::filters();
+		add_filter('wp_title', array($this, 'unlabel'), 1, 3);
+	}
+
+	public function unlabel ( $title, $sep, $seplocation ) {
+		global $wp_query;
+
+		$query_object = $wp_query->queried_object;
+		if ( empty($query_object->taxonomy) ) return $title;
+
+		$tax = get_taxonomy($query_object->taxonomy);
+		if ( empty($tax->labels->name) ) return $title;
+
+		$taxlabel = 'right' == $seplocation ? $tax->labels->name . " $sep " : " $sep " . $tax->labels->name;
+		$title = str_replace($taxlabel, '', $title);
+
+		return $title;
+	}
+
 	public function editlink ( $link ) {
 		return $this->edit;
 	}
+
+	/**
+	 * Determines page template names (page templates, not content templates)
+	 *
+	 * Uses the following precedence:
+	 * - taxonomy-shopp_taxonomy-slug.php
+	 * - shopp-taxonomy-slug.php
+	 * - taxonomy-shopp_taxonomy.php
+	 * - shopp-taxonomy.php
+	 * - shopp-collection.php
+	 * - shopp.php
+	 * - page.php
+	 *
+	 * @author Jonathan Davis
+	 * @since 1.3.1
+	 *
+	 * @return array Collection page templates
+	 **/
+	public function templates () {
+		global $wp_query;
+		$templates = array('shopp.php', 'page.php');
+
+		$taxonomy = self::$name;
+		array_unshift($templates, $taxonomy . '.php');
+
+		$object = $wp_query->queried_object;
+		if ( ! empty($object->taxonomy) )
+		$taxonomy = $object->taxonomy;
+
+		$shopptax = str_replace('_', '-', $taxonomy);
+		array_unshift($templates,
+			'taxonomy-' . $taxonomy . '.php', // taxonomy-shopp-category.php
+			$shopptax . '.php', // shopp-category.php
+			'taxonomy.php', // taxonomy.php
+			$taxonomy . '.php'  // shopp-collection.php
+		);
+
+		$slug = $object->slug;
+		if ( ! empty($slug) ) {
+			array_unshift($templates, str_replace('_', '-', $taxonomy) . '-' . $slug . '.php'); // shopp-category-slug.php
+			array_unshift($templates, 'taxonomy-' . $taxonomy . '-' . $slug . '.php'); // taxonomy-shopp_category-slug.php
+		}
+
+		return $templates;
+	}
+
 
 	public function content ($content) {
 		global $wp_query;
@@ -885,14 +969,11 @@ class ShoppCollectionPage extends ShoppPage {
 
 		$query_object = $wp_query->queried_object;
 		$stub = parent::poststub();
+		$Collection = ShoppCollection();
+		$query_object->name = $Collection->name;
+		$query_object->slug = $Collection->slug;
 		$wp_query->queried_object = $query_object;
-		$wp_query->is_tax = false;
-		$wp_query->is_archive = false;
-
-		switch ( $query_object->taxonomy ) {
-			case ProductTag::$taxon: $wp_query->is_tag = true; break;
-			case ProductCategory::$taxon: $wp_query->is_category = true; break;
-		}
+		$wp_query->is_post_type_archive = false;
 
 		return $stub;
 	}

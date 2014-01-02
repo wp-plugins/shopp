@@ -68,7 +68,7 @@ class ShoppSettings extends ShoppDatabaseObject {
 	 * @return boolean
 	 **/
 	public function available () {
-		return ($this->loaded && !empty($this->registry));
+		return ( $this->loaded && ! empty($this->registry) );
 	}
 
 	/**
@@ -81,14 +81,14 @@ class ShoppSettings extends ShoppDatabaseObject {
 	 **/
 	public function load ( $name = '', $arg2 = false ) {
 
-		if ( ! empty($name) ) $where[] = "name='" . sDB::clean($name) . "'";
-		else {
-			if ($this->bootup) return false; // Already trying to load all settings, bail out to prevent an infinite loop of DOOM!
+		if ( empty($name) ) {
+			if ( $this->bootup ) return false; // Already trying to load all settings, bail out to prevent an infinite loop of DOOM!
 			$this->bootup = true;
 		}
 
 		$Setting = $this->setting();
 		$where = array("parent=0", "context='$Setting->context'", "type='$Setting->type'");
+		if ( ! empty($name) ) $where[] = "name='" . sDB::clean($name) . "'";
 		$where = join(' AND ',$where);
 
 		$settings = sDB::query("SELECT name,value FROM $this->_table WHERE $where", 'array', array($this, 'register'));
@@ -230,20 +230,19 @@ class ShoppSettings extends ShoppDatabaseObject {
 
 		$null = null;
 
-		if ( $this->bootup ) {// Prevent infinite loop of DOOM!
+		if ( $this->bootup ) // Prevent infinite loop of DOOM!
 			return $null;
-		}
 
 		if ( ! $this->available() )
 			$this->load();
 
-		if ( ! array_key_exists($name,$this->registry) )
+		if ( ! array_key_exists($name, $this->registry) )
 			$this->load($name);
 
-		if ( ! isset($this->registry[$name]) )	// Return null and add an entry to the registry
-			$this->registry[$name] = $null;		// to avoid repeat database queries
+		if ( ! isset($this->registry[ $name ]) )	// Return null and add an entry to the registry
+			$this->registry[ $name ] = $null;		// to avoid repeat database queries
 
-		$setting = apply_filters( 'shopp_get_setting', $this->registry[$name], $name);
+		$setting = apply_filters( 'shopp_get_setting', $this->registry[ $name ], $name);
 
 		return $setting;
 
@@ -319,6 +318,9 @@ class ShoppSettings extends ShoppDatabaseObject {
 	 **/
 	public static function dbversion ( $legacy = false ) {
 
+		if ( ! empty(ShoppSettings()->registry['db_version']) )
+			return ShoppSettings()->registry['db_version'];
+
 		$source = $legacy ? 'setting' : self::$table;
 		$table = ShoppDatabaseObject::tablename($source);
 		$version = sDB::query("SELECT value FROM $table WHERE name='db_version' ORDER BY id DESC LIMIT 1", 'object', 'col');
@@ -326,7 +328,9 @@ class ShoppSettings extends ShoppDatabaseObject {
 		// Try again using the legacy table
 		if ( false === $version && false === $legacy ) $version = self::dbversion('legacy');
 
-	 	ShoppSettings()->registry['db_version'] = (int)$version;
+		if ( false === $version ) ShoppSettings()->registry['db_version'] = null;
+		else ShoppSettings()->registry['db_version'] = (int)$version;
+
 		return (int)$version;
 	}
 

@@ -255,7 +255,7 @@ class ShoppAjax {
 		$selected = $Shiprates->selected();
 
 
-		if ( $selected !== false && $_GET['method'] != $selected->slug ) {
+		if ( $selected === false || ( isset($selected->slug) && $_GET['method'] != $selected->slug) ) {
 			$Shiprates->selected( $_GET['method'] );
 		}
 
@@ -777,8 +777,7 @@ class ShoppAjax {
 	public function nonag () {
 		check_admin_referer('wp_ajax_shopp_nonag');
 		$id = get_current_user_id();
-        add_user_meta($id, 'shopp_nonag', 'true', true);
-		return true;
+		update_user_meta($id, 'shopp_nonag', (string)current_time('timestamp'));
 	}
 
 }

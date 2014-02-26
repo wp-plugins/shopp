@@ -4,21 +4,13 @@
  *
  * Flow controller for installation and upgrades
  *
- * @author Jonathan Davis
  * @version 1.0
- * @copyright Ingenesis Limited, January  6, 2010
+ * @copyright Ingenesis Limited, January 2010-2014
  * @package shopp
- * @subpackage shopp
  **/
 
 defined( 'WPINC' ) || header( 'HTTP/1.1 403' ) & exit; // Prevent direct access
 
-/**
- * ShoppInstallation
- *
- * @package shopp
- * @author Jonathan Davis
- **/
 class ShoppInstallation extends ShoppFlowController {
 
 	static $errors = array();
@@ -28,17 +20,17 @@ class ShoppInstallation extends ShoppFlowController {
 	 * Install constructor
 	 *
 	 * @return void
-	 * @author Jonathan Davis
 	 **/
 	function __construct () {
-		add_action('shopp_activate',array($this,'activate'));
-		add_action('shopp_deactivate',array($this,'deactivate'));
-		add_action('shopp_reinstall',array($this,'install'));
 
-		add_action('shopp_setup',array($this,'setup'));
-		add_action('shopp_setup',array($this,'images'));
-		add_action('shopp_setup',array($this,'roles'));
-		add_action('shopp_setup',array($this,'maintenance'));
+		add_action('shopp_activate',   array($this, 'activate'));
+		add_action('shopp_deactivate', array($this, 'deactivate'));
+		add_action('shopp_reinstall',  array($this, 'install'));
+
+		add_action('shopp_setup', array($this, 'setup'));
+		add_action('shopp_setup', array($this, 'images'));
+		add_action('shopp_setup', array($this, 'roles'));
+		add_action('shopp_setup', array($this, 'maintenance'));
 
 		$this->errors = array(
 			'header' => __('Shopp Activation Error','Shopp'),
@@ -88,8 +80,8 @@ class ShoppInstallation extends ShoppFlowController {
 			shopp_set_setting('display_welcome', 'on');
 
 		shopp_set_setting('updates', false);
-		shopp_set_setting('rebuild_rewrites', 'on');
 
+		add_action('init', 'flush_rewrite_rules', 99);
 		return true;
 	}
 
@@ -165,15 +157,12 @@ class ShoppInstallation extends ShoppFlowController {
 		shopp_set_setting('shopp_setup', '');
 		shopp_set_setting('maintenance', 'on');
 
-		// Process any database schema changes
-		$this->upschema();
-
-		// @todo Remove before release
-		if ( in_array($installed, array(1300,1301)) ) $installed = 1148;
-
 		if ( $installed < 1100 ) $this->upgrade_110();
 		if ( $installed < 1200 ) $this->upgrade_120();
 		if ( $installed < 1300 ) $this->upgrade_130();
+
+		$db = sDB::object();
+		file_put_contents(SHOPP_PATH . '/shopp_queries.txt', json_encode($db->queries));
 
 		ShoppSettings()->save('db_version', ShoppVersion::db());
 
@@ -194,7 +183,14 @@ class ShoppInstallation extends ShoppFlowController {
 	 *
 	 * @return void
 	 **/
-	public function upschema () {
+	public function upschema ( $filename = 'schema.sql' ) {
+
+		$path = SHOPP_PATH . '/core/schema';
+		$schema = "$path/$filename";
+
+		// Check for the schema definition file
+		if ( ! file_exists($schema) ) $this->error('nodbschema-upgrade');
+
 		// Test to ensure Shopp can create/drop tables
 		$testtable = 'shopp_db_permissions_test_'.time();
 		$tests = array("CREATE TABLE $testtable ( id INT )", "DROP TABLE $testtable");
@@ -209,13 +205,10 @@ class ShoppInstallation extends ShoppFlowController {
 		if ( ! function_exists('dbDelta') )
 			require(ABSPATH.'wp-admin/includes/upgrade.php');
 
-		// Check for the schema definition file
-		if (!file_exists(SHOPP_DBSCHEMA)) $this->error('nodbschema-upgrade');
 
 		ob_start();
-		include(SHOPP_DBSCHEMA);
-		$schema = ob_get_contents();
-		ob_end_clean();
+		include($schema);
+		$schema = ob_get_clean();
 
 		// Update the table schema
 		// Strip SQL comments
@@ -247,13 +240,21 @@ class ShoppInstallation extends ShoppFlowController {
 	 * shopp_promotions
 	 * shopp_products
 	 * shopp_categories
+	 * shopp_export_orders
+	 * shopp_export_customers
+	 * shopp_delete_orders
+	 * shopp_delete_customers
+	 * shopp_void
+	 * shopp_refund
 	 * shopp_orders						shopp-csr
 	 * shopp_customers
+	 * shopp_capture
 	 * shopp_menu
 	 *
 	 * @author John Dillick
 	 * @since 1.1
 	 *
+	 * @return void
 	 **/
 	public function roles () {
 		global $wp_roles; // WP_Roles roles container
@@ -267,6 +268,7 @@ class ShoppInstallation extends ShoppFlowController {
 		));
 
 		$caps['shopp-csr'] = array(
+				'shopp_capture',
 				'shopp_customers',
 				'shopp_orders',
 				'shopp_menu',
@@ -282,7 +284,6 @@ class ShoppInstallation extends ShoppFlowController {
 				'shopp_export_customers',
 				'shopp_delete_orders',
 				'shopp_delete_customers',
-				'shopp_capture',
 				'shopp_void',
 				'shopp_refund'
 		));
@@ -298,6 +299,7 @@ class ShoppInstallation extends ShoppFlowController {
 		));
 
 		$caps = apply_filters('shopp_role_caps', $caps, $shopp_roles);
+
 		foreach ( $shopp_roles as $role => $display ) {
 			if ( $wp_roles->is_role($role) ) {
 				foreach( $caps[$role] as $cap ) $wp_roles->add_cap($role, $cap, true);
@@ -448,12 +450,14 @@ class ShoppInstallation extends ShoppFlowController {
 	 * @return void
 	 **/
 	public function upgrade_110 () {
-
 		$meta_table = ShoppDatabaseObject::tablename('meta');
 		$setting_table = ShoppDatabaseObject::tablename('setting');
+		$product_table = ShoppDatabaseObject::tablename('product');
+
+		// 1.1 schema changes
+		$this->upschema('schema-110.sql');
 
 		// Update product status from the 'published' column
-		$product_table = ShoppDatabaseObject::tablename('product');
 		sDB::query("UPDATE $product_table SET status=CAST(published AS unsigned)");
 
 		// Set product publish date based on the 'created' date column
@@ -621,6 +625,8 @@ class ShoppInstallation extends ShoppFlowController {
 	}
 
 	public function upgrade_120 () {
+		// 1.2 schema changes
+		$this->upschema('schema-120.sql');
 		global $wpdb;
 
 		$db_version = ShoppSettings::dbversion();
@@ -1025,6 +1031,8 @@ class ShoppInstallation extends ShoppFlowController {
 	}
 
 	public function upgrade_130 () {
+		// 1.3 schema changes
+		$this->upschema();
 		global $wpdb;
 
 		if ( $db_version <= 1200 ) {

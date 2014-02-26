@@ -151,7 +151,7 @@ class ShoppAdminSystem extends ShoppAdminController {
 				$term_recount = true;
 			}
 
-	 		$this->settings_save();
+	 		shopp_set_formsettings();
 			$updated = __('Shipping settings saved.','Shopp');
 		}
 
@@ -241,7 +241,7 @@ class ShoppAdminSystem extends ShoppAdminController {
 			$id = isset($_POST['id'])?$_POST['id']:false;
 
 			if ($id == $module) {
-				if (isset($_POST['settings'])) $this->settings_save();
+				if (isset($_POST['settings'])) shopp_set_formsettings();
 				/** Save shipping service settings **/
 				$active[$module] = true;
 				shopp_set_setting('active_shipping',$active);
@@ -439,7 +439,7 @@ class ShoppAdminSystem extends ShoppAdminController {
 
 		if (!empty($_POST['save'])) {
 			check_admin_referer('shopp-settings-taxes');
-			$this->settings_save();
+			shopp_set_formsettings();
 			$updated = __('Tax settings saved.','Shopp');
 		}
 
@@ -685,10 +685,13 @@ class ShoppAdminSystem extends ShoppAdminController {
 					$indexed = '-' . $matched[1];
 					$gateway = str_replace($matched[0], '', $gateway);
 
+					// Merge the existing gateway settings with the newly updated settings
 					if ( isset($Gateways->active[ $gateway ]) ) {
 						$Gateway = $Gateways->active[ $gateway ];
-						$_POST['settings'][$gateway] = array_merge($Gateway->settings,$_POST['settings'][ $gateway ]);
+						// Cannot use array_merge() because it adds numeric index values instead of overwriting them
+						$_POST['settings'][ $gateway ] = (array) $_POST['settings'][ $gateway ] + (array) $Gateway->settings;
 					}
+
 				}
 
 				if ( ! empty($gateway) && isset($Gateways->active[ $gateway ])
@@ -699,7 +702,7 @@ class ShoppAdminSystem extends ShoppAdminController {
 
 			} // END isset($_POST['gateway])
 
-			$this->settings_save();
+			shopp_set_formsettings();
 			$updated = __('Shopp payments settings saved.','Shopp');
 		}
 
@@ -877,13 +880,6 @@ class ShoppAdminSystem extends ShoppAdminController {
 		$Shopp = Shopp::object();
 		$Shopp->Storage->settings();
 		$Shopp->Storage->ui();
-	}
-
-
-	public function settings_save () {
-		if (empty($_POST['settings']) || !is_array($_POST['settings'])) return false;
-		foreach ($_POST['settings'] as $setting => $value)
-			shopp_set_setting($setting,stripslashes_deep($value));
 	}
 
 	public static function reindex () {

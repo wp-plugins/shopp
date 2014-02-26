@@ -15,6 +15,7 @@
 defined( 'WPINC' ) || header( 'HTTP/1.1 403' ) & exit; // Prevent direct access
 
 class ShoppProduct extends WPShoppObject {
+
 	static $table = 'posts';
 	static $_taxonomies = array(
 		'shopp_category' => 'categories',
@@ -63,6 +64,9 @@ class ShoppProduct extends WPShoppObject {
 		'pinged' => 'pinged'
 	);
 
+	// Keep track of data load efforts
+	protected $_loaded = array();
+
 	/**
 	 * Product constructor
 	 *
@@ -71,11 +75,11 @@ class ShoppProduct extends WPShoppObject {
 	 *
 	 * @return void
 	 **/
-	public function __construct ($id=false,$key='ID') {
-		if (isset($this->_map[$key])) $key = $this->_map[$key];
-		$this->init(self::$table,$key);
+	public function __construct ( $id = false, $key = 'ID' ) {
+		if ( isset($this->_map[ $key ]) ) $key = $this->_map[ $key ];
+		$this->init(self::$table, $key);
 		$this->type = self::$posttype;
-		$this->load($id,$key);
+		$this->load($id, $key);
 	}
 
 	public function save () {
@@ -110,10 +114,10 @@ class ShoppProduct extends WPShoppObject {
 
 	public static function labels () {
 		return apply_filters( 'shopp_product_labels', array(
-			'name' => __('Products','Shopp'),
-			'singular_name' => __('Product','Shopp'),
-			'edit_item' => __('Edit Product','Shopp'),
-			'new_item' => __('New Product','Shopp')
+			'name' => __('Products', 'Shopp'),
+			'singular_name' => __('Product', 'Shopp'),
+			'edit_item' => __('Edit Product', 'Shopp'),
+			'new_item' => __('New Product', 'Shopp')
 		));
 	}
 
@@ -140,35 +144,47 @@ class ShoppProduct extends WPShoppObject {
 	 *
 	 * @return void
 	 **/
-	public function load_data ($options=array('prices','specs','images','categories','tags','meta','summary'),&$products=array()) {
+	public function load_data ( array $options = array('prices', 'specs', 'images', 'categories', 'tags', 'meta', 'summary'), array &$products = array() ) {
 		// Load summary before prices to ensure summary can be overridden by fresh pricing aggregation
 		$loaders = array(
-		//  'name'      'callback_method'
-			'summary' 	 => 'load_summary',
-			'meta' 		 => 'load_meta',
-			'prices' 	 => 'load_prices',
-			'specs' 	 => 'load_meta',
-			'images' 	 => 'load_meta',
-			'coverimages'=> 'load_coverimages',
-			'categories' => 'load_taxonomies',
-			'tags' 		 => 'load_taxonomies'
+		//  'name'           'callback_method'
+			'summary' 	  => 'load_summary',
+			'meta' 		  => 'load_meta',
+			'prices' 	  => 'load_prices',
+			'specs' 	  => 'load_meta',
+			'images' 	  => 'load_meta',
+			'coverimages' => 'load_coverimages',
+			'categories'  => 'load_taxonomies',
+			'tags' 		  => 'load_taxonomies'
 
 		);
+		// allow case-insensitive options
+		$options = array_map('strtolower', $options);
 
-		$options = array_map('strtolower',$options);
-		$load = array_flip(array_intersect($options,array_keys($loaders)));
-		$loadcalls = array_unique(array_values(array_intersect_key($loaders,$load)));
+		// prevent loading data sets already requested and processed
+		$options = array_diff($options, $this->_loaded);
 
-		if (!empty($products) ) {
-			$ids = join(',',array_keys($products));
+		// Only allow white-listed load operations
+		$load = array_flip(array_intersect($options, array_keys($loaders)));
+
+		// Convert load requests to loading callbacks while preventing duplicate calls
+		$loadcalls = array_unique(array_values(array_intersect_key($loaders, $load)));
+
+		if ( ! empty($products) ) { // Handle loading data across a collection of products
+			$ids = join(',', array_keys($products));
 			$this->products = &$products;
-		} else $ids = $this->id;
+			foreach ( $products as $product )
+				$product->_loaded = array_merge($product->_loaded, $options);
+		} else { // Handle loading data for a single product
+			$ids = $this->id;
+			$this->_loaded = array_unique(array_merge($this->_loaded, $options));
+		}
 
 		if ( empty($ids) ) return;
-		foreach ($loadcalls as $loadmethod) {
+
+		foreach ( $loadcalls as $loadmethod )
 			if ( method_exists($this, $loadmethod) )
-				call_user_func_array(array($this,$loadmethod),array($ids));
-		}
+				call_user_func_array(array($this, $loadmethod), array($ids));
 
 	}
 
@@ -201,7 +217,7 @@ class ShoppProduct extends WPShoppObject {
 		$this->prices = array();
 
 		// Reset summary properties for correct price range and stock sums in single product (product page) loading contexts
-		if ( ! empty($this->id) && $this->id == $ids && empty($this->checksum) ) {
+		if (!empty($this->id) && $this->id == $ids) {
 			$this->load_summary($ids);
 			$this->resum();
 		}
@@ -397,7 +413,7 @@ class ShoppProduct extends WPShoppObject {
 	 **/
 	public function metasetloader ( &$records, &$record, $id = 'id', $property = false, $collate = true, $merge = false ) {
 
-		if (isset($this->products) && !empty($this->products)) $products = &$this->products;
+		if ( isset($this->products) && ! empty($this->products) ) $products = &$this->products;
 		else $products = array();
 
 		$metamap = array(
@@ -435,13 +451,14 @@ class ShoppProduct extends WPShoppObject {
 
 		}
 
-		if ('images' == $property) {
+		if ( 'images' == $property ) {
 			// Prevent double-loading images (can occur when images are specifically loaded, then all meta is generically loaded)
-			if (isset($target->$property) && isset($target->{$property}[$record->id])) return;
+			if ( isset($target->$property) && isset($target->{$property}[ $record->id ]) ) return;
 			$collate = 'id';
+			// Prevent extra image queries since we already tried
 		}
 
-		if ('specs' == $property) {
+		if ( 'specs' == $property ) {
 			$property = 'specnames';
 			parent::metaloader($records, $record, $products, $id, $property, $collate, $merge);
 
@@ -576,6 +593,7 @@ class ShoppProduct extends WPShoppObject {
 			$price->promoprice = $discount->pricetag;
 		}
 
+		$price->_sale = $price->sale; // Keep a copy of the price record "sale" setting {@see issue #2797}
 		if ($price->promoprice < $price->price) $target->sale = $price->sale = 'on';
 
 		// Grab price and saleprice ranges (minimum - maximum)
@@ -1109,16 +1127,17 @@ class ShoppProduct extends WPShoppObject {
 			if ( ! isset($term->term_id) || empty($term->term_id) ) continue; 		// Skip invalid entries
 			if ( ! isset($term->taxonomy) || empty($term->taxonomy) ) continue; 	// Skip invalid entries
 
-			if (!isset($terms[$term->taxonomy])) $terms[$term->taxonomy] = array();
-			$terms[$term->taxonomy][] = (int)$term->term_id;
+			if ( ! isset($terms[ $term->taxonomy ]) )
+				$terms[ $term->taxonomy ] = array();
+			$terms[ $term->taxonomy ][] = (int)$term->term_id;
 		}
 		foreach ($terms as $taxonomy => $termlist)
 			wp_set_object_terms( $this->id, $termlist, $taxonomy );
 
 		$metadata = array('specs','images','settings','meta');
-		foreach ($metadata as $metaset) {
+		foreach ( $metadata as $metaset ) {
 			if ( ! is_array($this->$metaset) ) continue;
-			foreach ($this->$metaset as $metaobjects) {
+			foreach ( $this->$metaset as $metaobjects ) {
 				if ( ! is_array($metaobjects) ) $metaobjects = array($metaobjects);
 				foreach ( $metaobjects as $meta ) {
 					$ObjectClass = get_class($meta);
@@ -1129,6 +1148,11 @@ class ShoppProduct extends WPShoppObject {
 				}
 			}
 		}
+
+		// Duplicate summary (primarily for summary settings data)
+		$Summary = new ProductSummary($original);
+		$Summary->product = $this->id;
+		$Summary->save();
 
 		// Re-summarize product pricing
 		$this->load_data(array('prices','summary'));

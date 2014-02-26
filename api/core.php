@@ -192,7 +192,7 @@ function is_catalog_page ( $wp_query = false ) {
 }
 
 /**
- * Determines if the requested page is the catalog front page.
+ * Determines if the requested page is the storefront catalog page
  *
  * @author Jonathan Davis
  * @since 1.2
@@ -392,7 +392,10 @@ function is_shopp_smart_collection ( $wp_query = false ) {
 function is_shopp_taxonomy ( $wp_query = false ) {
 	if ( false === $wp_query ) { global $wp_the_query; $wp_query = $wp_the_query; }
 
+	if ( empty($wp_query->tax_query) ) return false; // No taxonomy request {@see #2748}
+
 	$object = $wp_query->get_queried_object();
+
 	$taxonomies = get_object_taxonomies(ShoppProduct::$posttype, 'names');
 
 	return isset($object->taxonomy) && in_array($object->taxonomy, $taxonomies);

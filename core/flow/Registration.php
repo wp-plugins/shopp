@@ -35,6 +35,7 @@ class ShoppRegistration extends FormPostFramework {
 		'billing' => array(),
 		'shipping' => array(),
 		'info' => array(),
+		'marketing' => '',
 		'loginname' => '',
 		'password' => '',
 		'confirm-password' => ''
@@ -87,7 +88,8 @@ class ShoppRegistration extends FormPostFramework {
 			'email' => $this->form('email'),
 			'phone' => $this->form('phone'),
 			'info' => $this->form('info'),
-            'password' => $this->form('password', true),
+			'marketing' => $this->form('marketing'),
+			'password' => $this->form('password', true),
 			'loginname' => $this->form('loginname', true)
 		);
 
@@ -107,6 +109,7 @@ class ShoppRegistration extends FormPostFramework {
 	}
 
 	public function shipaddress () {
+
 		$ShippingAddress = ShoppOrder()->Shipping;
 		$BillingAddress = ShoppOrder()->Billing;
 
@@ -137,10 +140,10 @@ class ShoppRegistration extends FormPostFramework {
 
 		// Prevent overwriting the card data when updating the BillingAddress
 		$ignore = array();
-		if ( ! empty($form['card']) && preg_replace('/[^\d]/','',$form['card']) == substr($BillingAddress->card,-4) )
+		if ( ! empty($form['card']) && preg_replace('/[^\d]/', '', $form['card']) == substr($BillingAddress->card, -4) )
 			$ignore[] = 'card';
 
-		$BillingAddress->updates($form,$ignore);
+		$BillingAddress->updates($form, $ignore);
 
 		// Handle same address copying
 		ShoppOrder()->sameaddress = strtolower( $this->form('sameaddress') );

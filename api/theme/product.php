@@ -139,7 +139,9 @@ class ShoppProductThemeAPI implements ShoppAPI {
 			// 'promos' => 'on', @deprecated option use 'discounts'
 			'discounts' => 'on',
 			'taxes' => null,
-			'input' => null
+			'input' => null,
+			'money' => 'on',
+			'number' => 'off'
 		);
 		$options = array_merge($defaults, $options);
 		extract($options, EXTR_SKIP);
@@ -159,20 +161,29 @@ class ShoppProductThemeAPI implements ShoppAPI {
 		if ( array_key_exists('type', $options) ) 		$_[] = $addon->type;
 		if ( array_key_exists('sku', $options) ) 		$_[] = $addon->sku;
 
-		if ( array_key_exists('price', $options) )
-			$_[] = money(self::_taxed((float)$addon->price, $O, $addon->tax, $taxes));
+		if ( array_key_exists('price', $options) ) {
+			$price = Shopp::roundprice(self::_taxed((float)$addon->price, $O, $addon->tax, $taxes));
+			if ( Shopp::str_true($money) ) $_[] = Shopp::money($price);
+			else $_[] = $price;
+		}
 
 		if ( array_key_exists('saleprice', $options) ) {
-			if ( Shopp::str_true($discounts) )
-				$_[] = money(self::_taxed((float)$addon->promoprice, $O, $addon->tax, $taxes));
-			else $_[] = money(self::_taxed((float)$addon->saleprice, $O, $addon->tax, $taxes));
+			$saleprice = Shopp::str_true($discounts) ? $addon->promoprice : $addon->saleprice;
+			$saleprice = Shopp::roundprice( self::_taxed((float)$addon->promoprice, $O, $addon->tax, $taxes) );
+			if ( Shopp::str_true($money) ) $_[] = Shopp::money($saleprice);
+			else $_[] = $saleprice;
 		}
 
 		if ( array_key_exists('stock', $options) ) 		$_[] = $addon->stock;
 		if ( array_key_exists('weight', $options) )
 			$_[] = round($addon->weight, 3) . (false !== $weightunit ? " $weightunit" : false);
-		if ( array_key_exists('shipfee', $options) )
-			$_[] = money(Shopp::floatval($addon->shipfee));
+
+		if ( array_key_exists('shipfee', $options) ) {
+			$shipfee = Shopp::roundprice($addon->shipfee);
+			if ( Shopp::str_true($money) ) $_[] = Shopp::money($shipfee);
+			else $_[] = $shipfee;
+		}
+
 		if ( array_key_exists('sale', $options) )
 			return Shopp::str_true($addon->sale);
 		if ( array_key_exists('shipping', $options) )
@@ -424,6 +435,7 @@ class ShoppProductThemeAPI implements ShoppAPI {
 		// Force select the first loaded image
 		unset($options['id']);
 		$options['index'] = 0;
+		$options['load'] = 'coverimages';
 		return self::image( $result, $options, $O );
 	}
 
@@ -502,7 +514,7 @@ class ShoppProductThemeAPI implements ShoppAPI {
 		);
 
 		// Populate defaults from named settings, if provided
-		$ImageSettings = ImageSettings::__instance();
+		$ImageSettings = ImageSettings::object();
 
 		if ( ! empty($options['p_setting']) ) {
 			$settings = $ImageSettings->get($options['p_setting']);
@@ -550,21 +562,24 @@ class ShoppProductThemeAPI implements ShoppAPI {
 
 		// Setup preview images
 		$previews = '';
+
+		if ( 'transparent' == strtolower($p_bg) ) $fill = -1;
+		else $fill = $p_bg ? hexdec(ltrim($p_bg, '#')) : false;
+
+		$lowest_quality = min(ImageSetting::$qualities);
+
+		$scale = $p_fit ? array_search($p_fit, ImageAsset::$defaults['scaling']) : false;
+		$sharpen = $p_sharpen ? max($p_sharpen, ImageAsset::$defaults['sharpen']) : false;
+		$quality = $p_quality ? max($p_quality, $lowest_quality) : false;
+
 		foreach ( $O->images as $Image ) {
 			$firstPreview = false;
 			if ( empty($previews) ) { // Adds "filler" image to reserve the dimensions in the DOM
 				$firstPreview = $previews .=
 					'<li class="fill">' .
-					'<img src="' .  Shopp::clearpng() . '" alt="" style="width: ' . (int) $maxwidth . 'px; height: auto;" />' .
+					'<img src="' .  Shopp::clearpng() . '" alt="" style="width: ' . (int) $maxwidth . 'px; height: ' . (int) $maxheight . 'px;" />' .
 					'</li>';
 			}
-
-			$scale = $p_fit ? array_search($p_fit, ImageAsset::$defaults['scaling']) : false;
-			$sharpen = $p_sharpen ? min($p_sharpen, ImageAsset::$defaults['sharpen']) : false;
-			$quality = $p_quality ? min($p_quality, ImageAsset::$defaults['quality']) : false;
-
-			if ( 'transparent' == strtolower($p_bg) ) $fill = -1;
-			else $fill = $p_bg ? hexdec(ltrim($p_bg, '#')) : false;
 
 			$scaled = $Image->scaled($width, $height, $scale);
 
@@ -574,15 +589,12 @@ class ShoppProductThemeAPI implements ShoppAPI {
 
 			$img = '<img src="' . $src . '"' . $titleattr . ' alt="' . $alt . '" width="' . (int) $scaled['width'] . '" height="' . (int) $scaled['height'] . '" />';
 
-
 			if ( $p_link ) {
-
 				$hrefattr = $Image->url();
 				$relattr = empty($rel) ? '' : ' rel="' . esc_attr($rel) . '"';
 				$linkclasses = array('gallery', $product_class, $zoomfx);
 
 				$img = '<a href="' . $hrefattr . '" class="' . join(' ', $linkclasses) . '"' . $relattr . $titleattr . '>' . $img . '</a>';
-
 			}
 
 			$previews .= '<li id="preview-' . $Image->id . '"' . ( empty($firstPreview) ? '' : '  class="active"' ) . '>' . $img. '</li>';
@@ -727,7 +739,14 @@ class ShoppProductThemeAPI implements ShoppAPI {
 	 * @return string
 	 **/
 	public static function image ( $result, $options, $O ) {
-		if ( empty($O->images) ) $O->load_data( array('images') );
+		$loadset = array('images', 'coverimages');
+		if ( empty($options['load']) || ! in_array($options['load'], $loadset) )
+			$options['load'] = $loading[0];
+
+		// Load images if no images are loaded or we're loading all images after the coverimage was loaded
+		if ( empty($O->images) || 'images' == $options['load'] )
+			$O->load_data( array($options['load']) );
+
 		return ShoppStorefrontThemeAPI::image( $result, $options, $O );
 	}
 
@@ -806,7 +825,7 @@ class ShoppProductThemeAPI implements ShoppAPI {
 			if ( isset($options['cols']) ) $cols = ' cols="' . (int)$options['cols'] . '"';
 			if ( isset($options['rows']) ) $rows = ' rows="' . (int)$options['rows'] . '"';
 
-			$result .= '<textarea name="products[' . (int)$O->id . '][data][' . esc_attr($name) . ']" id="'.$id.'"'.$cols.$rows.inputattrs($options).'>'.esc_html($value).'</textarea>';
+			$result = '<textarea name="products[' . (int)$O->id . '][data][' . esc_attr($name) . ']" id="'.$id.'"'.$cols.$rows.inputattrs($options).'>'.esc_html($value).'</textarea>';
 
 		} else {
 
@@ -1135,7 +1154,14 @@ class ShoppProductThemeAPI implements ShoppAPI {
 	}
 
 	public static function summary ( $result, $options, $O ) {
-		return apply_filters('shopp_product_summary',$O->summary);
+		$summary = $O->summary;
+
+		$overflow = isset($options['overflow']) ? esc_html($options['overflow']) : '&hellip;';
+
+		if ( ! empty($options['clip']) && strlen($O->summary) > (int)$options['clip'] )
+			$summary = substr($summary, 0, strpos(wordwrap($summary, (int)$options['clip'], "\b"), "\b")) . $overflow;
+
+		return apply_filters('shopp_product_summary', $summary);
 	}
 
 	public static function tag ( $result, $options, $O ) {
@@ -1197,7 +1223,9 @@ class ShoppProductThemeAPI implements ShoppAPI {
 			'units' => 'on',
 			'promos' => 'on',
 			'discounts' => 'on',
-			'taxes' => null
+			'taxes' => null,
+			'money' => 'on',
+			'number' => 'off'
 		);
 		$options = array_merge($defaults, $options);
 		extract($options, EXTR_SKIP);
@@ -1213,19 +1241,27 @@ class ShoppProductThemeAPI implements ShoppAPI {
 		if ( array_key_exists('sku', $options) )	$_[] = $variation->sku;
 		if ( array_key_exists('stock', $options) ) 	$_[] = $variation->stock;
 
-		if ( array_key_exists('price', $options) )
-			$_[] = money(self::_taxed((float)$variation->price, $O, $variation->tax, $taxes));
+		if ( array_key_exists('price', $options) ) {
+			$price = Shopp::roundprice(self::_taxed((float)$variation->price, $O, $variation->tax, $taxes));
+			if ( Shopp::str_true($money) ) $_[] = money($price);
+			else $_[] = $price;
+		}
 
 		if ( array_key_exists('saleprice', $options) ) {
-			if (Shopp::str_true($discounts) ) $_[] = money(self::_taxed((float)$variation->promoprice, $O, $variation->tax, $taxes));
-			else $_[] = money(self::_taxed((float)$variation->saleprice, $O, $variation->tax, $taxes));
+			$saleprice = Shopp::str_true($discounts) ? $variation->promoprice : $variation->saleprice;
+			$saleprice = Shopp::roundprice( self::_taxed((float)$saleprice, $O, $variation->tax, $taxes) );
+			if ( Shopp::str_true($money) ) $_[] = money($saleprice);
+			else $_[] = $saleprice;
 		}
 
 		if ( array_key_exists('weight', $options) )
 			$_[] = round($variation->weight, 3) . ($weightunit ? " $weightunit" : false);
 
-		if ( array_key_exists('shipfee', $options) )
-			$_[] = money(Shopp::floatval($variation->shipfee));
+		if ( array_key_exists('shipfee', $options) ) {
+			$shipfee = Shopp::roundprice($variation->shipfee);
+			if ( Shopp::str_true($money) ) $_[] = money($shipfee);
+			else $_[] = $shipfee;
+		}
 
 		if ( array_key_exists('sale', $options) )
 			return Shopp::str_true($variation->sale);

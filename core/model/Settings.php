@@ -34,7 +34,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	 * If no settings are available (the table doesn't exist),
 	 * the unavailable flag is set.
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 * @version 1.1
 	 **/
@@ -62,7 +61,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Update the availability status of the settings database table
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.1
 	 *
 	 * @return boolean
@@ -74,7 +72,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Load settings from the database
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @return boolean
@@ -107,7 +104,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Add a new setting to the registry and store it in the database
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @param string $name Name of the setting
@@ -130,7 +126,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Updates the setting in the registry and the database
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @param string $name Name of the setting
@@ -160,7 +155,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Save a setting to the database
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @param string $name Name of the setting to save
@@ -180,7 +174,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Save a setting to the database if it does not already exist
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.1
 	 *
 	 * @param string $name Name of the setting to save
@@ -194,7 +187,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Remove a setting from the registry and the database
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @param string $name Name of the setting to remove
@@ -220,7 +212,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	 * If no setting is available in the registry, try
 	 * loading it directly from the database.
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @param string $name The name of the setting
@@ -251,7 +242,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Restores a serialized value to a runtime object/structure
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @param string $value A value to restore if necessary
@@ -260,9 +250,9 @@ class ShoppSettings extends ShoppDatabaseObject {
 	public function restore ($value) {
 		if ( ! is_string($value) ) return $value;
 		// Return unserialized, if serialized value
-		if ( is_serialized($value) ) {
-			$restored = unserialize($value);
-			if ( empty($restored) ) $restored = unserialize( stripslashes($value) );
+		if ( sDB::serialized($value) ) {
+			$restored = @unserialize($value);
+			if ( empty($restored) ) $restored = @unserialize( stripslashes($value) );
 			if ( false !== $restored ) return $restored;
 		}
 		return $value;
@@ -271,7 +261,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Provides a blank setting object template
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @return object
@@ -293,15 +282,19 @@ class ShoppSettings extends ShoppDatabaseObject {
 	/**
 	 * Automatically collect and save settings from a POST form
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.0
 	 *
 	 * @return void
 	 **/
 	public function saveform () {
 		if ( empty($_POST['settings']) || ! is_array($_POST['settings']) ) return false;
-		foreach ( $_POST['settings'] as $setting => $value )
-			$this->save($setting, stripslashes_deep($value));
+
+		$settings = stripslashes_deep($_POST['settings']);
+		$settings = Shopp::trim_deep($settings);
+
+		foreach ( $settings as $setting => $value )
+			$this->save($setting, $value);
+
 	}
 
 	/**
@@ -310,7 +303,6 @@ class ShoppSettings extends ShoppDatabaseObject {
 	 * Queries the database to get the installed database version number. If not available,
 	 * also checks the legacy
 	 *
-	 * @author Jonathan Davis
 	 * @since 1.3
 	 *
 	 * @param string $legacy Set to anything but boolean false to attempt to lookup the version from the pre-1.2 settings table
@@ -327,11 +319,18 @@ class ShoppSettings extends ShoppDatabaseObject {
 
 		// Try again using the legacy table
 		if ( false === $version && false === $legacy ) $version = self::dbversion('legacy');
+		elseif ( false !== $legacy ) { // No version in the legacy settings table, possible 1.0 install?
+			// Look in the old settings table for the old Shopp version setting
+			$shopp_version = sDB::query("SELECT value FROM $table WHERE name='version' ORDER BY id DESC LIMIT 1", 'object', 'col');
+			// Use (int) 1 to indicate Shopp 1.0 installed and avoid the install process
+			if ( version_compare($shopp_version, '1.1', '<') ) $version = 1;
+		}
 
 		if ( false === $version ) ShoppSettings()->registry['db_version'] = null;
 		else ShoppSettings()->registry['db_version'] = (int)$version;
 
 		return (int)$version;
 	}
+
 
 } // END class Settings

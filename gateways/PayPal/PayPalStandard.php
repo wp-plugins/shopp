@@ -5,7 +5,7 @@
  * @author Jonathan Davis, John Dillick
  * @copyright Ingenesis Limited, May 2009
  * @package shopp
- * @version 1.3
+ * @version 1.3.2
  * @since 1.2
  **/
 
@@ -52,6 +52,9 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 		add_filter( 'shopp_themeapi_cart_paypal', array( $this, 'cartapi' ) );
 		// add_filter('shopp_themeapi_cart_paypal', array($this, 'sendcart'), 10, 2); // provides shopp('cart.paypal') checkout button
 		add_filter( 'shopp_checkout_submit_button', array($this, 'submit'), 10, 3 ); // replace submit button with paypal image
+
+		// Prevent inclusive taxes from adding extra taxes to the order
+		add_filter( 'shopp_gateway_tax_amount', array($this, 'notaxinclusive' ) );
 
 		// request handlers
 		add_action( 'shopp_remote_payment', array( $this, 'pdt' ) ); // process sync return from PayPal
@@ -346,14 +349,14 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 		$id = sanitize_key( $this->module );
 		$title = Shopp::__( 'Sending order to PayPal&hellip;' );
 		$message = '<form id="' . $id . '" action="' . $this->url() . '" method="POST">' .
-			$this->form( $Purchase ) .
-			'<h1>' . $title . '</h1>' .
-			'<noscript>' .
-			'<p>' . Shopp::__( 'Click the &quot;Checkout with PayPal&quot; button below to submit your order to PayPal for payment processing:' ) . '</p>' .
-			'<p>' . join( '', $this->submit() ) . '</p>' .
-			'</noscript>' .
-			'</form>' .
-			'<script type="text/javascript">document.getElementById("' . $id . '").submit();</script></body></html>';
+					$this->form( $Purchase ) .
+					'<h1>' . $title . '</h1>' .
+					'<noscript>' .
+					'<p>' . Shopp::__( 'Click the &quot;Checkout with PayPal&quot; button below to submit your order to PayPal for payment processing:' ) . '</p>' .
+					'<p>' . join( '', $this->submit() ) . '</p>' .
+					'</noscript>' .
+					'</form>' .
+					'<script type="text/javascript">document.getElementById("' . $id . '").submit();</script></body></html>';
 
 		wp_die( $message, $title, array( 'response' => 200 ) );
 	}
@@ -501,7 +504,7 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 				$id++;
 				$_['item_number_'.$id]		= $id;
 				$_['item_name_'.$id]		= apply_filters('paypal_freeorder_handling_label',
-					__('Shipping & Handling','Shopp'));
+															__('Shipping & Handling','Shopp'));
 				$_['amount_'.$id]			= $this->amount( max((float)$this->amount('shipping'), 0.01) );
 				$_['quantity_'.$id]			= 1;
 			} else
@@ -533,7 +536,10 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 			elseif ( 'invoiced' === $Purchase->txnstatus )
 				$this->sale($Purchase);
 			elseif ( 'capture' === $event ) {
-				if ( ! $Purchase->capturable() ) return false; // Already captured
+
+				if ( ! $Purchase->capturable() )
+					return ShoppOrder()->success(); // Already captured
+
 				if ( 'voided' === $Purchase->txnstatus )
 					ShoppOrder()->invoice($Purchase); // Reinvoice for cancel-reversals
 
@@ -694,11 +700,7 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 	 * @since 1.2
 	 **/
 	public function pdt () {
-
-		if ( empty(ShoppOrder()->inprogress) ) {
-			shopp_debug('PDT processing could not load in-progress order from session.');
-			return Shopp::redirect( Shopp::url( false, 'thanks', false ) ); // Send back customer to thanks page and hope IPN takes care of it properly
-		}
+		$Order = ShoppOrder();
 
 		if ( ! $this->pdtvalid() ) return;
 
@@ -707,18 +709,14 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 		$id = $Message->order();
 		$event = $Message->event();
 
-		if ( ShoppOrder()->inprogress != $id ) {
-			shopp_debug('PDT processing order did not match the inprogress order.');
-			return Shopp::redirect( Shopp::url( false, 'thanks', false ) );
-		}
-
 		$Purchase = new ShoppPurchase($id);
 
-		if ( ! isset($Purchase->id) || empty($Purchase->id) ) {
+		if ( empty($Purchase->id) ) {
 			shopp_debug('PDT processing could not load the in progress order from the database.');
 			return Shopp::redirect( Shopp::url(false, 'thanks', false ) );
 		}
 
+		$Order->inprogress = $Purchase->id;
 		$this->process($event, $Purchase);
 		Shopp::redirect( Shopp::url( false, 'thanks', false ) );
 	}
@@ -932,7 +930,6 @@ class ShoppPayPalStandardMessage {
 		}
 
 		$this->labels(); // Initialize labels
-
 	}
 
 	protected static function labels () {

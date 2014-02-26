@@ -20,7 +20,7 @@
 						<div class="stamp shipped<?php if ($Purchase->isvoid()) echo ' void'; ?>"><div class="type"><?php _e('Shipped','Shopp'); ?></div><div class="ing">&nbsp;</div></div>
 						<?php endif; ?>
 
-						<?php if ($Purchase->ispaid()): ?>
+						<?php if ( $Purchase->ispaid() && ! $Purchase->isvoid() ): ?>
 						<div class="stamp paid"><div class="type"><?php _e('Paid','Shopp'); ?></div><div class="ing">&nbsp;</div></div>
 						<?php elseif ($Purchase->isvoid()): ?>
 						<div class="stamp void"><div class="type"><?php _e('Void','Shopp'); ?></div><div class="ing">&nbsp;</div></div>
@@ -113,7 +113,7 @@
 						<?php if ( $Purchase->discounts() ): ?>
 						<ul class="promos">
 						<?php foreach ( $Purchase->discounts as $id => $Discount ): ?>
-							<li><small><a href="<?php echo esc_url( add_query_arg(array('page' => $this->Admin->pagename('discounts'), 'id' => $id), admin_url('admin.php'))); ?>"><?php echo esc_html($Discount->name); ?></a></small></li>
+							<li><small><a href="<?php echo esc_url( add_query_arg(array('page' => $this->Admin->pagename('discounts'), 'id' => $id), admin_url('admin.php'))); ?>"><?php echo esc_html($Discount->name); ?></a><?php if ( isset($Discount->code) ) echo " - " . esc_html($Discount->code); ?></small></li>
 						<?php endforeach; ?>
 						</ul>
 						<?php endif; ?>
@@ -186,9 +186,10 @@
 	                                                $Product = new ShoppProduct($Item->product);
 	                                                $Product->load_data( array('images') );
 	                                                $Image = reset($Product->images);
+	                                                $image_id = apply_filters('shopp_order_item_image_id', $Image->id, $Item, $Product);
 
 	                                                if ( ! empty($Image) ) { ?>
-	                                                    <img src="?siid=<?php echo $Image->id ?>&amp;<?php echo $Image->resizing(38, 0, 1) ?>" width="38" height="38" class="alignleft" />
+	                                                    <img src="?siid=<?php echo $image_id ?>&amp;<?php echo $Image->resizing(38, 0, 1) ?>" width="38" height="38" class="alignleft" />
 	                                                <?php
 	                                                }
 	                                                echo $Item->name;
@@ -250,7 +251,7 @@
 									default:
 										?>
 											<td class="<?php echo esc_attr(join(' ',$classes)); ?>">
-											<?php do_action( 'shopp_manage_order_'.$column.'_column_data', $column, $Product ); ?>
+											<?php do_action( 'shopp_manage_order_' . sanitize_key($column) .'_column_data', $column, $Product, $Item, $Purchase ); ?>
 											</td>
 										<?php
 										break;

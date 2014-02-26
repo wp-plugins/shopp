@@ -295,7 +295,7 @@ class ShoppCatalogPage extends ShoppPage {
 
 	public function templates () {
 		$templates = parent::templates();
-		if ( is_catalog_frontpage() )
+		if ( $this->is_frontpage() )
 			array_unshift($templates, 'front-page.php');
 		return $templates;
 	}
@@ -320,7 +320,7 @@ class ShoppCatalogPage extends ShoppPage {
 	}
 
 	public function styleclass ( $classes ) {
-		if ( is_catalog_frontpage() )
+		if ( $this->is_frontpage() )
 			$classes[] = 'home';
 		$classes[] = $this->name();
 		return $classes;
@@ -332,12 +332,15 @@ class ShoppCatalogPage extends ShoppPage {
 
 		$stub = parent::poststub();
 		$wp_query->is_post_type_archive = false;
-		// if ( is_catalog_frontpage() )
-		// 	$wp_query->is_home = true;
+		if ( $this->is_frontpage() )
+			$wp_query->is_home = true;
 
 		return $stub;
 	}
 
+	public function is_frontpage () {
+		return self::frontid() == get_option('page_on_front');
+	}
 }
 
 /**
@@ -391,11 +394,12 @@ class ShoppAccountPage extends ShoppPage {
 		// $download_request = get_query_var('s_dl');
 		if ( ! $request) $request = ShoppStorefront()->account['request'];
 		$templates = array( 'account-'.$request.'.php', 'account.php' );
-
 		if ( 'login' == $request || ! ShoppCustomer()->loggedin() ) $templates = array( 'login-' . $request . '.php', 'login.php' );
+		$context = ShoppStorefront::intemplate(); // Set account page context
 
+		$Errors = ShoppErrorStorefrontNotices();
 		ob_start();
-		if ( apply_filters( 'shopp_show_account_errors', true ) && ShoppErrors()->exist( SHOPP_AUTH_ERR ) )
+		if ( apply_filters( 'shopp_show_account_errors', true ) && $Errors->exist() )
 			echo ShoppStorefront::errors( array( "errors-$context", 'account-errors.php', 'errors.php' ) );
 		Shopp::locate_template( $templates, true );
 		$content = ob_get_clean();
@@ -403,7 +407,7 @@ class ShoppAccountPage extends ShoppPage {
 		// Suppress the #shopp div for sidebar widgets
 		if ($widget) $content = '<!-- id="shopp" -->' . $content;
 
-		return apply_filters( 'shopp_account_template', $content );
+		return apply_filters( 'shopp_account_template', $content, $request );
 
 	}
 

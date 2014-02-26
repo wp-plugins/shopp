@@ -113,6 +113,9 @@ class ShoppCart extends ListFramework {
 		$command = 'update'; // Default command
 		$commands = array('add', 'empty', 'update', 'remove');
 
+		if ( isset($_REQUEST['empty']) )
+			$_REQUEST['cart'] = 'empty';
+
 		$request = isset($_REQUEST['cart']) ? strtolower($_REQUEST['cart']) : false;
 
 		if ( in_array( $request, $commands) )
@@ -124,7 +127,7 @@ class ShoppCart extends ListFramework {
 			'products' => array(),
 			'item' => false,
 			'items' => array(),
-			'remove' => array()
+			'remove' => array(),
 		);
 		$request = array_intersect_key($_REQUEST,$allowed); // Filter for allowed arguments
 		$request = array_merge($allowed, $request);			// Merge to defaults
@@ -286,16 +289,19 @@ class ShoppCart extends ListFramework {
 	 * @since 1.0
 	 *
 	 * @param int $quantity The quantity of the item to add to the cart
-	 * @param ShoppProduct $Product Product object to add to the cart
-	 * @param ShoppPrice $Price Price object to add to the cart
+	 * @param ShoppProduct|ShoppCartItem $Product Product object or cart item object to add to the cart
+	 * @param mixed $Price Price object to add to the cart
 	 * @param int $category The id of the category navigated to find the product
 	 * @param array $data Any custom item data to carry through
 	 * @return boolean
 	 **/
 	public function additem ( $quantity = 1, &$Product, &$Price, $category = false, $data = array(), $addons = array() ) {
-		$NewItem = new ShoppCartItem($Product, $Price, $category, $data, $addons);
 
-		if ( ! $NewItem->valid() || ! $this->addable($NewItem) ) return false;
+		if ( 'ShoppCartItem' == get_class($Product) ) $NewItem = $Product;
+		else {
+			$NewItem = new ShoppCartItem($Product, $Price, $category, $data, $addons);
+			if ( ! $NewItem->valid() || ! $this->addable($NewItem) ) return false;
+		}
 
 		$id = $NewItem->fingerprint();
 
@@ -624,9 +630,8 @@ class ShoppCart extends ListFramework {
 		// Apply credits to discount the order
 		$Discounts->credits();
 
-		if ( $Shipping->free() && $Totals->total('shipping') > 0 ) {
+		if ( $Discounts->shipping() ) // If shipping discounts changed, recalculate shipping amount
 			$Totals->register( new OrderAmountShipping( array('id' => 'cart', 'amount' => $Shipping->calculate() ) ) );
-		}
 
 		do_action_ref_array('shopp_cart_retotal', array(&$Totals) );
 

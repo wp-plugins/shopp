@@ -69,7 +69,7 @@ class ProductCollection implements Iterator {
 			'ids' => false,			// Flag for loading product IDs only
 			'adjacent' => false,	//
 			'product' => false,		//
-			'load' => array(),		// Product data to load
+			'load' => array('coverimages'),		// Product data to load
 			'inventory' => false,	// Flag for detecting inventory-based queries
 			'taxquery' => false,	// Cross taxonomy queries
 			'debug' => false		// Output the query for debugging
@@ -1466,14 +1466,9 @@ class SmartCollection extends ProductCollection {
 	public $slug = false;
 	public $name = false;
 	public $loading = array();
+	protected $_options = array();
 
 	public function __construct ( array $options = array() ) {
-
-		if ( isset($options['show']) )
-			$this->loading['limit'] = $options['show'];
-
-		if ( isset($options['pagination']) )
-			$this->loading['pagination'] = $options['pagination'];
 
 		$this->taxonomy = self::$taxon;
 
@@ -1483,6 +1478,7 @@ class SmartCollection extends ProductCollection {
 		$this->slug = $this->uri = $slugs[0];
 
 		$this->name = call_user_func(array($thisclass, 'name'));
+		$this->_options = $options;
 	}
 
 	public static function name () {
@@ -1494,8 +1490,22 @@ class SmartCollection extends ProductCollection {
 	}
 
 	public function load ( array $options = array() ) {
+		$options = array_merge( $this->_options, $options );
 		$this->smart($options);
+
+		if ( isset($options['show']) )
+			$this->loading['limit'] = $options['show'];
+
+		if ( isset($options['pagination']) )
+			$this->loading['pagination'] = $options['pagination'];
+
 		parent::load($this->loading);
+	}
+
+	public static function defaultlinks ( $termlink, $term, $taxonomy ) {
+		if ( false !== strpos($termlink, "taxonomy=" . self::$taxon) )
+			return home_url("?" . self::$taxon . "=$term->slug");
+		return $termlink;
 	}
 
 	public function register () {
@@ -1754,7 +1764,7 @@ class SearchResults extends SmartCollection {
 			'where' => array($where),
 			'groupby' => 'p.ID',
 			'orderby' => 'score DESC');
-		if ( ! empty($pricematch) ) $this->loading['having'] = array($pricematch);
+		if ( ! empty($pricematch) ) $this->loading[ empty( $search )? 'where':'having' ] = array($pricematch);
 		if ( isset($options['show']) ) $this->loading['limit'] = $options['show'];
 		if ( isset($options['published']) ) $this->loading['published'] = $options['published'];
 		if ( isset($options['paged']) ) $this->loading['paged'] = $options['paged'];

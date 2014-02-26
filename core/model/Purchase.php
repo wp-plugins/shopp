@@ -252,8 +252,8 @@ class ShoppPurchase extends ShoppDatabaseObject {
 	 * @return boolean
 	 **/
 	public function isrefunded () {
-		if (empty($this->events)) $this->load_events();
-		return ($this->refunded == $this->captured);
+		if ( empty($this->events) ) $this->load_events();
+		return ( $this->refunded == $this->captured );
 	}
 
 	/**
@@ -265,7 +265,7 @@ class ShoppPurchase extends ShoppDatabaseObject {
 	 * @return boolean
 	 **/
 	public function isvoid () {
-		if (empty($this->events)) $this->load_events();
+		if ( empty($this->events) ) $this->load_events();
 		return ($this->voided > 0 && $this->voided >= $this->invoiced);
 	}
 
@@ -284,7 +284,7 @@ class ShoppPurchase extends ShoppDatabaseObject {
 	}
 
 	public function capturable () {
-		if (!$this->authorized) return 0.0;
+		if ( ! $this->authorized ) return 0.0;
 		return ($this->authorized - (float)$this->captured);
 	}
 
@@ -470,10 +470,10 @@ class ShoppPurchase extends ShoppDatabaseObject {
 				shopp_setting('merchant_email'),		// Recipient email address
 				sprintf(__('Order #%s: %s', 'Shopp'), $Purchase->id, $Event->label()), // Subject
 				"email-merchant-$Event->name.php")		// Template
-		));
+		), $Event);
 
 		// Event-specific hook for event specific email messages
-		$messages = apply_filters('shopp_' . $Event->name . '_order_event_emails', $messages);
+		$messages = apply_filters('shopp_' . $Event->name . '_order_event_emails', $messages, $Event);
 
 		foreach ( $messages as $name => $message ) {
 			list($addressee, $email, $subject, $template) = $message;
@@ -819,8 +819,8 @@ class PurchasesExport {
 						case "promo":
 						case "discount":
 											$meta_table = ShoppDatabaseObject::tablename(ShoppMetaObject::$table);
-											$joins[ $meta_table ] = "INNER JOIN $meta_table AS discounts ON discounts.parent = o.id";
-											$search[] = "discounts.value LIKE '%$keyword%' AND discounts.context='purchase' AND discounts.name='discounts'"; break;
+											$joins[ $meta_table ] = "INNER JOIN $meta_table AS discounts ON discounts.parent = o.id AND discounts.name='discounts' AND discounts.context='purchase'";
+											$search[] = "discounts.value LIKE '%$keyword%'"; break;
 					}
 				}
 				if ( empty($search) ) $search[] = "(o.id='$s' OR CONCAT(firstname,' ',lastname) LIKE '%$s%')";
@@ -837,13 +837,19 @@ class PurchasesExport {
 		$purchasedtable = ShoppDatabaseObject::tablename(ShoppPurchased::$table);
 		$offset = ($this->set * $this->limit);
 
-		$c = 0; $columns = array(); $purchasedcols = false;
+		$c = 0; $columns = array(); $purchasedcols = false; $discountcols = false;
 		foreach ( $this->selected as $column ) {
 			$columns[] = "$column AS col".$c++;
 			if ( false !== strpos($column, 'p.') ) $purchasedcols = true;
+			if ( false !== strpos($column, 'discounts') ) $discountcols = true;
 		}
 		if ( $purchasedcols ) $FROM = "FROM $purchasedtable AS p INNER JOIN $purchasetable AS o ON o.id=p.purchase";
 		else $FROM = "FROM $purchasetable AS o";
+
+		if ( $discountcols ) {
+			$meta_table = ShoppDatabaseObject::tablename(ShoppMetaObject::$table);
+			$joins[ $meta_table ] = "INNER JOIN $meta_table AS discounts ON discounts.parent = o.id AND discounts.name='discounts' AND discounts.context='purchase'";
+		}
 
 		$joins = join(' ', $joins);
 

@@ -125,7 +125,7 @@ class ShoppStorefrontThemeAPI implements ShoppAPI {
 		// Populate defaults from named image settings to allow specific overrides
 		if ( ! empty($options['setting']) ) {
 			$setting = $options['setting'];
-			$ImageSettings = ImageSettings::__instance();
+			$ImageSettings = ImageSettings::object();
 			$settings = $ImageSettings->get($setting);
 			if ( $settings ) $defaults = array_merge($defaults, $settings->options());
 		}
@@ -137,7 +137,7 @@ class ShoppStorefrontThemeAPI implements ShoppAPI {
 		if ( false !== $id ) {
 			if ( isset($O->images[ $id ]) ) $Image = $O->images[ $id ];
 			else {
-				shopp_debug( sprintf('No %s image exists at with the specified database ID of %d.', get_class($O), $id) );
+				shopp_debug( sprintf('No %s image exists with the specified database ID of %d.', get_class($O), $id) );
 				return '';
 			}
 		}
@@ -400,11 +400,11 @@ class ShoppStorefrontThemeAPI implements ShoppAPI {
 
 		$options = array_merge($defaults, $options);
 
-		$options['style'] = 'list';
+		$options['style'] = '';
 		if ( Shopp::str_true($options['dropdown']) )
 			$options['style'] = 'dropdown';
-		elseif ( ! Shopp::str_true($options['hierarchy']) || ! Shopp::str_true($options['wraplist']) )
-			$options['style'] = '';
+		elseif ( Shopp::str_true($options['hierarchy']) || Shopp::str_true($options['wraplist']) )
+			$options['style'] = 'list';
 
 		if ( ! empty($options['showsmart']) && empty($options['smart']) )
 			$options['smart'] = $options['showsmart'];
@@ -484,7 +484,7 @@ class ShoppStorefrontThemeAPI implements ShoppAPI {
 		    $Collection->name = call_user_func(array($CollectionClass, 'name'));
 		    $Collection->slug = $slug;
 		    $Collection->term_group = 0;
-		    $Collection->taxonomy = 'shopp_collection';
+		    $Collection->taxonomy = get_class_property('SmartCollection','taxon');
 		    $Collection->description = '';
 		    $Collection->parent = 0;
 			$collections[] = $Collection;
@@ -1176,25 +1176,22 @@ class ShoppCategoryWalker extends Walker {
 
 		$smartcollection = $category->taxonomy == get_class_property( 'SmartCollection', 'taxon');
 
-		if ( $smartcollection ) {
-			global $wp_rewrite;
-			$termlink = $wp_rewrite->get_extra_permastruct($category->taxonomy);
-			if ( ! empty($termlink) ) $category->slug = get_class_property( 'SmartCollection', 'namespace') . '/' . $category->slug;
-		}
-
 		$categoryname = $category->name;
+
 		$link = get_term_link($category);
+
 		$classes = '';
 		if ( 'list' == $args['style'] ) {
 			$classes = 'cat-item cat-item-' . $category->term_id;
-			if ( ! empty($current_category) ) {
-				$_current_category = get_term( $current_category, $category->taxonomy );
-				if ( $category->term_id == $current_category )
-					$classes .=  ' current-cat current';
-				elseif ( $category->term_id == $_current_category->parent )
-					$classes .=  ' current-cat-parent current-parent';
-			}
+
+			$Collection = ShoppCollection();
+			if ( isset($Collection->slug) && $Collection->slug == $category->slug)
+				$classes .= ' current-cat current';
+
+			if ( ! empty($Collection->parent) && $Collection->parent == $category->term_id)
+				$classes .= ' current-cat-parent current-parent';
 		}
+
 		$total = isset($category->count) ? $category->count : false;
 
 		$title = sprintf(__( 'View all &quot;%s&quot; products' ), $categoryname);
@@ -1202,7 +1199,7 @@ class ShoppCategoryWalker extends Walker {
 		$filtered = apply_filters('shopp_storefront_categorylist_link', compact('link', 'classes', 'categoryname', 'title', 'total'));
 		extract($filtered, EXTR_OVERWRITE);
 
-		$link = '<a href="' . esc_url( $link ) . '" title="' . esc_attr( $title ) . '"';
+		$link = '<a href="' . esc_url( $link ) . '" title="' . esc_attr( $title ) . '" class="' . $classes . '"';
 		$link .= '>';
 		$link .= $categoryname . '</a>';
 
@@ -1214,7 +1211,7 @@ class ShoppCategoryWalker extends Walker {
 
 		if ( 'list' == $args['style'] ) {
 			$output .= "\t<li";
-			if ( ! empty($class) ) $output .=  ' class="' . $class . '"';
+			if ( ! empty($classes) ) $output .=  ' class="' . $classes . '"';
 			$output .= ">$link\n";
 		} else {
 			$output .= "\t$link<br />\n";
@@ -1267,13 +1264,15 @@ class ShoppCategoryDropdownWalker extends Walker {
 	public function start_el ( &$output, $category, $depth = 0, $args = array(), $id = 0 ) {
 		$pad = str_repeat('&nbsp;', $depth * 3);
 
+		$link = get_term_link($category);
+
 		$cat_name = apply_filters('shopp_storefront_categorylist_option', $category->name, $category);
-		$output .= "\t<option class=\"level-$depth\" value=\"".$category->slug."\"";
+		$output .= "\t<option class=\"level-$depth\" value=\"" . $link . "\"";
 		if ( $category->term_id == $args['selected'] )
 			$output .= ' selected="selected"';
 		$output .= '>';
 		$output .= $pad.$cat_name;
-		if ( $args['products'] )
+		if ( $args['products'] && isset($category->count) )
 			$output .= '&nbsp;&nbsp;('. $category->count .')';
 		$output .= "</option>\n";
 	}

@@ -94,6 +94,7 @@ class ShoppResources {
 	public function export_reports () {
 		if ( ! current_user_can('shopp_financials') || ! current_user_can('shopp_export_orders') ) exit();
 
+		add_filter('shopp_reports', array('ShoppAdminReport', 'xreports'));
 		$reports = ShoppAdminReport::reports();
 		$Report = ShoppAdminReport::load();
 
@@ -232,7 +233,7 @@ class ShoppResources {
 			do_action_ref_array('shopp_download_request', array($Purchased));
 		}
 
-		if ( apply_filters('shopp_download_forbidden', $forbidden) ) {
+		if ( apply_filters('shopp_download_forbidden', $forbidden, $Purchased) ) {
 			Shopp::redirect( add_query_arg('downloads', '', Shopp::url(false, 'account') ), true, 303 );
 		}
 

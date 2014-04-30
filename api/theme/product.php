@@ -15,25 +15,24 @@ defined( 'WPINC' ) || header( 'HTTP/1.1 403' ) & exit; // Prevent direct access
 
 add_filter('shopp_themeapi_context_name', array('ShoppProductThemeAPI', '_context_name'));
 
+// WP auto embed support
+global $wp_embed;
+if ( ! is_object($wp_embed) ) $wp_embed = new WP_Embed;
+
 // Default text filters for product Theme API tags
 add_filter('shopp_themeapi_product_name','convert_chars');
 add_filter('shopp_themeapi_product_summary','convert_chars');
 add_filter('shopp_themeapi_product_description', 'wptexturize');
 add_filter('shopp_themeapi_product_description', 'convert_chars');
 add_filter('shopp_themeapi_product_description', 'wpautop');
-add_filter('shopp_themeapi_product_description', 'do_shortcode',11);
+add_filter('shopp_themeapi_product_description', array($wp_embed, 'run_shortcode'), 11);
+add_filter('shopp_themeapi_product_description', array($wp_embed, 'autoembed'), 11);
+add_filter('shopp_themeapi_product_description', 'do_shortcode',12);
 add_filter('shopp_themeapi_product_spec', 'wptexturize');
 add_filter('shopp_themeapi_product_spec', 'convert_chars');
-add_filter('shopp_themeapi_product_spec', 'do_shortcode', 11);
-
-// WP auto embed support
-global $wp_embed;
-if ( ! is_object($wp_embed) ) $wp_embed = new WP_Embed;
-
-add_filter('shopp_product_spec', array($wp_embed, 'run_shortcode'), 8);
-add_filter('shopp_product_spec', array($wp_embed, 'autoembed'), 8);
-add_filter('shopp_product_description', array($wp_embed, 'run_shortcode'), 8);
-add_filter('shopp_product_description', array($wp_embed, 'autoembed'), 8);
+add_filter('shopp_themeapi_product_spec', array($wp_embed, 'run_shortcode'), 11);
+add_filter('shopp_themeapi_product_spec', array($wp_embed, 'autoembed'), 11);
+add_filter('shopp_themeapi_product_spec', 'do_shortcode', 12);
 
 /**
  * Provides shopp('product') template API functionality
@@ -941,7 +940,7 @@ class ShoppProductThemeAPI implements ShoppAPI {
 		$select_attrs = array('title','required','class','disabled','required','size','tabindex','accesskey');
 
 		unset($_options['label']); // Interferes with the text input value when passed to inputattrs()
-		$labeling = '<label for="quantity-'.$O->id.'">'.$label.'</label>';
+		if( !empty($label) ) $labeling = '<label for="quantity-'.$O->id.'">'.$label.'</label>';
 
 
 		if ( ! isset($O->_prices_loop) ) reset($O->prices);
@@ -1330,13 +1329,13 @@ class ShoppProductThemeAPI implements ShoppAPI {
 				if ( 'variation' != $pricing->context ) continue;
 
 				$currently = Shopp::str_true($pricing->sale) ? $pricing->promoprice : $pricing->price;
-				$disabled = Shopp::str_true($pricing->inventory) && $pricing->stock == 0 ? ' disabled="disabled"' : '';
+				$disable = ( $pricetag->type == 'N/A' || ( Shopp::str_true($pricing->inventory) && $pricing->stock == 0 ) );
 
 				$currently = self::_taxed((float)$currently, $O, $pricing->tax, $taxes);
 
 				$discount = 0 == $pricing->price ? 0 : 100 - round($pricing->promoprice * 100 / $pricing->price);
 				$_ = new StdClass();
-				$_->p = 'Donation' != $pricing->type ? money($currently) : false;
+				$_->p = 'Donation' != $pricing->type && ! $disable ? money($currently) : false;
 				$_->l = $pricing->label;
 				$_->i = Shopp::str_true($pricing->inventory);
 				$_->s = $_->i ? (int)$pricing->stock : false;
@@ -1346,8 +1345,8 @@ class ShoppProductThemeAPI implements ShoppAPI {
 				$_->r = $pricing->promoprice != $pricing->price ? money($pricing->price) : false;
 				$_->d = $discount > 0 ? $discount : false;
 
-				if ( 'N/A' != $pricing->type )
-					$string .= '<option value="' . $pricing->id . '"' . $disabled . '>' . esc_html(self::_variant_formatlabel($format, $_)) . '</option>' . "\n";
+				if ( $disable && 'show' == $disabled )
+					$string .= '<option value="' . $pricing->id . '"' . ( $disable ? ' disabled="disabled"' : '' ) . '>' . esc_html(self::_variant_formatlabel($format, $_)) . '</option>' . "\n";
 			}
 			$string .= '</select>';
 			if ( ! empty($options['after_menu']) ) $string .= $options['after_menu']."\n";
@@ -1489,18 +1488,11 @@ new ProductOptionsMenus(<?php printf("'select%s.product%d.options'",$select_coll
 		foreach ( $levels as $level )
 			$$level = isset($O->{$level}[ $property ]) ? $O->{$level}[ $property ] : false;
 
-		$inclusivetax = self::_inclusive_taxes($O);
-		if ( isset($taxoption) ) $taxoption = Shopp::str_true( $taxoption );
+		$taxrates = Shopp::taxrates($O);
 
-		// Handle inclusive/exclusive tax presentation options (product editor setting or api option)
-		// If the 'taxes' option is specified and the item either has inclusive taxes that apply,
-		// or the 'taxes' option is forced on (but not both) then handle taxes by either adding or excluding taxes
-		// This is an exclusive or known as XOR, the lesser known brother of Thor that gets left out of the family get togethers
-		if ( isset($taxoption) && ( $inclusivetax ^ $taxoption ) ) {
-			$taxrates = Shopp::taxrates($O);
-			foreach ( $levels as $level )
-				$$level = self::_taxed($$level, $O, isset($O->{$level}[ $property . '_tax' ]), $taxoption, $taxrates);
-		}
+		foreach ( $levels as $level )
+			$$level = self::_taxed($$level, $O, isset($O->{$level}[ $property . '_tax' ]) ? $O->{$level}[ $property . '_tax' ] : true, $taxoption, $taxrates);
+
 
 		return array($min, $max);
 	}
@@ -1519,11 +1511,23 @@ new ProductOptionsMenus(<?php printf("'select%s.product%d.options'",$select_coll
 	 * @return float The amount with tax added or tax excluded
 	 **/
 	private static function _taxed ( $amount, ShoppProduct $O, $istaxed, $taxoption = null, array $taxrates = array() ) {
-		if ( empty($taxrates) ) $taxrates = Shopp::taxrates($O);
-
 		if ( ! $istaxed ) return $amount;
 
+		if ( empty($taxrates) ) $taxrates = Shopp::taxrates($O);
+
 		$inclusivetax = self::_inclusive_taxes($O);
+		if ( isset($taxoption) ) $taxoption = Shopp::str_true( $taxoption );
+
+		if ( $inclusivetax ) {
+			$adjustment = ShoppTax::adjustment($taxrates);
+			if ( 1 != $adjustment )
+				return (float) ($amount / $adjustment);
+		}
+
+		// Handle inclusive/exclusive tax presentation options (product editor setting or api option)
+		// If the 'taxes' option is specified and the item either has inclusive taxes that apply,
+		// or the 'taxes' option is forced on (but not both) then handle taxes by either adding or excluding taxes
+		// This is an exclusive or known as XOR, the lesser known brother of Thor that gets left out of the family get togethers
 		if ( isset($taxoption) && ( $inclusivetax ^ $taxoption ) ) {
 
 			if ( $taxoption )

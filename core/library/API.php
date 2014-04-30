@@ -63,7 +63,7 @@ class ShoppAPIModules extends ModuleLoader {
 	protected $loader = 'ShoppAPIFile';
 
 	protected $interface = 'ShoppAPI';
-	protected $paths = array(SHOPP_THEME_APIS);
+	protected $paths = array(SHOPP_THEME_APIS, SHOPP_ADDONS);
 
 	/**
 	 * API constructor
@@ -112,7 +112,7 @@ class ShoppAPIFile extends ModuleFile {
 		$apicontext = call_user_func(array($api, '_apicontext'));
 
 		$setobject_call = method_exists($api,'_setobject') ? array($api, '_setobject') : array($this, 'setobject');
-		add_filter('shopp_themeapi_object', $setobject_call, 10, 2);
+		add_filter('shopp_themeapi_object', $setobject_call, 10, 3);
 
 		// Define a static $map property as an associative array or tag => member function names.
 		// Without the tag key, it will be registered as a general purpose filter for all tags in this context

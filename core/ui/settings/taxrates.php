@@ -59,10 +59,10 @@
 		<td colspan="5"><input type="hidden" name="id" value="${id}" /><input type="hidden" name="editing" value="true" />
 		<table id="taxrate-editor">
 			<tr>
-			<td scope="row" valign="top" class="rate"><input type="text" name="settings[taxrates][${id}][rate]" id="tax-rate" value="${rate}" size="6" class="selectall" /><br /><label for="tax-rate"><?php _e('Tax Rate','Shopp'); ?></label><br />
-			<input type="hidden" name="settings[taxrates][${id}][compound]" value="off" /><label><input type="checkbox" id="tax-compound" name="settings[taxrates][${id}][compound]" value="on" ${compounded} />&nbsp;<?php Shopp::_e('Compound'); ?></label></td>
+			<td scope="row" valign="top" class="rate"><input type="text" name="settings[taxrates][${id}][rate]" id="tax-rate" value="${rate}" size="7" class="selectall" tabindex="1" /><br /><label for="tax-rate"><?php _e('Tax Rate','Shopp'); ?></label><br />
+			<input type="hidden" name="settings[taxrates][${id}][compound]" value="off" /><label><input type="checkbox" id="tax-compound" name="settings[taxrates][${id}][compound]" value="on" ${compounded} tabindex="4" />&nbsp;<?php Shopp::_e('Compound'); ?></label></td>
 			<td scope="row" class="conditions">
-			<select name="settings[taxrates][${id}][country]" class="country">${countries}</select><select name="settings[taxrates][${id}][zone]" class="zone no-zones">${zones}</select>
+			<select name="settings[taxrates][${id}][country]" class="country" tabindex="2">${countries}</select><select name="settings[taxrates][${id}][zone]" class="zone no-zones" tabindex="3">${zones}</select>
 			<?php echo ShoppUI::button('add','addrule'); ?>
 			<?php
 				$options = array('any' => Shopp::__('any'), 'all' => strtolower(Shopp::__('All')));
@@ -228,10 +228,10 @@
 				</div>
 			</td>
 			<td class="local column-local">
-				<div class="checkbox"><?php if ($haslocals): ?><div class="checked">&nbsp;</div><?php else: ?>&nbsp;<?php endif; ?></div>
+				<div class="checkbox <?php if ( $haslocals ) echo 'checked'; ?>">&nbsp;</div>
 			</td>
 			<td class="conditional column-conditional">
-				<div class="checkbox"><?php if (count($rules) > 0): ?><div class="checked">&nbsp;</div><?php else: ?>&nbsp;<?php endif; ?></div>
+				<div class="checkbox <?php if ( count($rules) > 0 ) echo 'checked'; ?>">&nbsp;</div>
 			</td>
 		</tr>
 		<?php endforeach; ?>

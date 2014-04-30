@@ -225,7 +225,7 @@ class ShoppOrder {
 		$locale = empty($this->Billing->locale) ? null : $this->Billing->locale;
 
 		$this->Tax->location($Address->country, $Address->state, $locale); // Update the ShoppTax working location
-
+		$this->Tax->customer($this->Customer);
 	}
 
 	/**
@@ -644,6 +644,7 @@ class ShoppOrder {
 	public function success () {
 
 		$this->purchase = $this->inprogress;
+		ShoppPurchase(new ShoppPurchase($this->purchase));
 		$this->inprogress = false;
 
 		do_action('shopp_order_success', ShoppPurchase());

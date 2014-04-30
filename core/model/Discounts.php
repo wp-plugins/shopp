@@ -97,11 +97,11 @@ class ShoppDiscounts extends ListFramework {
 		// Iterate over each promo to determine whether it applies
 		$discount = 0;
 		foreach ( $Promotions as $Promo ) {
-			$apply = false;
 
 			// Cancel matching if max number of discounts reached
-			if ( $this->maxed($Promo) ) break;
+			if ( $this->maxed($Promo) && ! $this->applied($Promo) ) continue;
 
+			$apply = false;
 			$matches = 0;
 			$total = 0;
 
@@ -180,6 +180,10 @@ class ShoppDiscounts extends ListFramework {
 		$this->add($Promo->id, $Discount);
 		$this->shipping($Discount); // Flag shipping changes
 
+	}
+
+	private function applied ( ShoppOrderPromo $Promo ) {
+		return $this->exists($Promo->id);
 	}
 
 	/**
@@ -262,7 +266,7 @@ class ShoppDiscounts extends ListFramework {
 		// Prevent customers from reapplying codes
 		if ( ! empty($request) && $code == $request && $this->codeapplied($code) ) {
 			shopp_add_error( Shopp::__('&quot;%s&quot; has already been applied.', esc_html($code)) );
-			$this->request = false;
+			$this->request = false; // Reset request after the request is processed
 			return false;
 		}
 
@@ -271,6 +275,8 @@ class ShoppDiscounts extends ListFramework {
 
 		$this->codes[ $code ] = $Promo->id;
 		$Promo->code = $code;
+
+		$this->request = false; // Reset request after the request is successfully processed (#2808)
 
 		return true;
 	}
@@ -294,7 +300,8 @@ class ShoppDiscounts extends ListFramework {
 		$_REQUEST['cart'] = true;
 
 		$this->remove($Discount->id()); // Remove it from the discount stack if it is there
-		$this->shipping($Discount);		// Flag shipping changes
+		if ( $this->shipping($Discount) ) // Flag shipping changes
+			$Discount->shipfree(false);   // Remove free shipping if this is a free shipping discount (@see #2885)
 
 		if ( isset($this->codes[ $Discount->code() ]) ) {
 			unset($this->codes[ $Discount->code() ]);
@@ -966,10 +973,14 @@ class ShoppOrderDiscount {
 		}
 
 		if ( ! empty($this->items) ) {
-
+			$removed = array();
 			$discounts = array();
 			foreach ( $this->items as $id => $unitdiscount ) {
 				$Item = $Cart->get($id);
+				if ( empty($Item) ) {
+					$removed[] = $id;
+					continue;
+				}
 
 				if ( self::BOGOF == $this->type() ) {
 					if ( ! is_array( $Item->bogof) ) $Item->bogof = array();
@@ -987,6 +998,12 @@ class ShoppOrderDiscount {
 				if ( $Item->discounts - $itemdiscounts > 0 )
 					$discounts[] = ($Item->discounts - $itemdiscounts);
 			}
+
+			foreach ( $removed as $id )
+				unset($this->items[ $id ]);
+
+			if ( empty($this->items) )
+				$this->unapply();
 
 			$this->amount = array_sum($discounts);
 

@@ -206,7 +206,7 @@ class ShoppCart extends ListFramework {
 				if ( false !== $price )
 					$prices[] = $price;
 
-				if ( empty($prices) ) $prices[] = false; // Use default price for produc if none provided
+				if ( empty($prices) ) $prices[] = false; // Use default price for product if none provided
 				foreach($prices as $price)
 					$result = $this->additem($quantity, $Product, $price, $category, $data, $addons);
 			}
@@ -630,8 +630,12 @@ class ShoppCart extends ListFramework {
 		// Apply credits to discount the order
 		$Discounts->credits();
 
+
 		if ( $Discounts->shipping() ) // If shipping discounts changed, recalculate shipping amount
 			$Totals->register( new OrderAmountShipping( array('id' => 'cart', 'amount' => $Shipping->calculate() ) ) );
+
+		// Ensure taxes are recalculated
+		$Totals->total('tax');
 
 		do_action_ref_array('shopp_cart_retotal', array(&$Totals) );
 
@@ -647,7 +651,7 @@ class ShoppCart extends ListFramework {
 	 * @param string $register The name of the register to get an amount for
 	 * @return float The total amount for the register
 	 **/
-	public function total ( string $register = null ) {
+	public function total ( string $register = null, string $entry = null ) {
 
 		// Setup totals counter
 		if ( false === $this->Totals ) $this->Totals = new OrderTotals();
@@ -672,7 +676,7 @@ class ShoppCart extends ListFramework {
 		$this->recurring = array();
 
 		// Clear the item registers
-		$this->Totals = new OrderTotals;
+		$this->Totals = new OrderTotals();
 
 	}
 

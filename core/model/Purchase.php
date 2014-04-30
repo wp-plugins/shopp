@@ -837,18 +837,24 @@ class PurchasesExport {
 		$purchasedtable = ShoppDatabaseObject::tablename(ShoppPurchased::$table);
 		$offset = ($this->set * $this->limit);
 
-		$c = 0; $columns = array(); $purchasedcols = false; $discountcols = false;
+		$c = 0; $columns = array(); $purchasedcols = false; $discountcols = false; $addoncols = false;
 		foreach ( $this->selected as $column ) {
 			$columns[] = "$column AS col".$c++;
 			if ( false !== strpos($column, 'p.') ) $purchasedcols = true;
 			if ( false !== strpos($column, 'discounts') ) $discountcols = true;
+			if ( false !== strpos($column, 'addons') ) $addoncols = true;
 		}
 		if ( $purchasedcols ) $FROM = "FROM $purchasedtable AS p INNER JOIN $purchasetable AS o ON o.id=p.purchase";
 		else $FROM = "FROM $purchasetable AS o";
 
 		if ( $discountcols ) {
 			$meta_table = ShoppDatabaseObject::tablename(ShoppMetaObject::$table);
-			$joins[ $meta_table ] = "INNER JOIN $meta_table AS discounts ON discounts.parent = o.id AND discounts.name='discounts' AND discounts.context='purchase'";
+			$joins[ $meta_table ] = "LEFT JOIN $meta_table AS discounts ON discounts.parent = o.id AND discounts.name='discounts' AND discounts.context='purchase'";
+		}
+		
+		if ( $addoncols ) {
+			$meta_table = ShoppDatabaseObject::tablename(ShoppMetaObject::$table);
+			$joins[ $meta_table.'_2' ] = "LEFT JOIN $meta_table AS addons ON addons.parent = p.id AND addons.type='addon' AND addons.context='purchased'";
 		}
 
 		$joins = join(' ', $joins);

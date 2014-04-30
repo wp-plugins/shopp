@@ -16,10 +16,10 @@ defined( 'WPINC' ) || header( 'HTTP/1.1 403' ) & exit; // Prevent direct access
 add_filter('shopp_themeapi_context_name', array('ShoppCollectionThemeAPI', '_context_name'));
 
 // Default text filters for category/collection Theme API tags
-add_filter('shopp_themeapi_category_description', 'wptexturize');
-add_filter('shopp_themeapi_category_description', 'convert_chars');
-add_filter('shopp_themeapi_category_description', 'wpautop');
-add_filter('shopp_themeapi_category_description', 'do_shortcode',11);
+add_filter('shopp_themeapi_collection_description', 'wptexturize');
+add_filter('shopp_themeapi_collection_description', 'convert_chars');
+add_filter('shopp_themeapi_collection_description', 'wpautop');
+add_filter('shopp_themeapi_collection_description', 'do_shortcode',11);
 
 /**
  * shopp('category','...') tags
@@ -518,7 +518,7 @@ class ShoppCollectionThemeAPI implements ShoppAPI {
 			if (!empty($previous) && $O->page > 1) {
 				$prev = $O->page-1;
 				$link = $O->pagelink($prev);
-				$_[] = '<li class="previous"><a href="'.esc_url_raw($link).'">'.$previous.'</a></li>';
+				$_[] = '<li class="previous"><a href="'.esc_url_raw($link).'" rel="prev">'.$previous.'</a></li>';
 			} else $_[] = '<li class="previous disabled">'.$previous.'</li>';
 			// end previous button
 
@@ -541,7 +541,7 @@ class ShoppCollectionThemeAPI implements ShoppAPI {
 			if (!empty($next) && $O->page < $O->pages) {
 				$pagenum = $O->page+1;
 				$link = $O->pagelink($pagenum);
-				$_[] = '<li class="next"><a href="'.esc_url_raw($link).'">'.$next.'</a></li>';
+				$_[] = '<li class="next"><a href="'.esc_url_raw($link).'" rel="next">'.$next.'</a></li>';
 			} else $_[] = '<li class="next disabled">'.$next.'</li>';
 
 			$_[] = '</ul>';

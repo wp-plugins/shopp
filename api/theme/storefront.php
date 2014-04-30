@@ -160,9 +160,12 @@ class ShoppStorefrontThemeAPI implements ShoppAPI {
 		if ( ! $width ) $width = $_width;
 		if ( ! $height ) $height = $_height;
 
+		$lowest_quality = min(ImageSetting::$qualities);
+
 		$scale = $fit ? array_search( $fit, ImageAsset::$defaults['scaling'] ) : null;
-		$sharpen = $sharpen ? min( $sharpen, ImageAsset::$defaults['sharpen'] ) : null;
-		$quality = $quality ? min( $quality, ImageAsset::$defaults['quality'] ) : null;
+		$sharpen = $sharpen ? max( $sharpen, ImageAsset::$defaults['sharpen'] ) : null;
+		$quality = $quality ? max( $quality, $lowest_quality ) : null;
+
 		if ( 'transparent' == strtolower($bg) ) $fill = -1;
 		else $fill = $bg ? hexdec(ltrim($bg, '#')) : false;
 
@@ -585,8 +588,13 @@ class ShoppStorefrontThemeAPI implements ShoppAPI {
 	}
 
 	public static function has_categories ( $result, $options, $O ) {
-		$showsmart = isset($options['showsmart'])?$options['showsmart']:false;
-		if ( empty($O->categories) ) $O->load_categories(array('where'=>'true'),$showsmart);
+		$defaults = array(
+			'showsmart' => false
+		);
+		$options = array_merge($defaults, $options);
+		extract($options, EXTR_SKIP);
+
+		if ( empty($O->categories) ) $O->load_categories($options, $showsmart);
 		else { // Make sure each entry is a valid ProductCollection to prevent fatal errors @bug #2017
 			foreach ($O->categories as $id => $term) {
 				if (  $Category instanceof ProductCollection ) continue;

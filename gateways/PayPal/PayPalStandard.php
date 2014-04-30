@@ -294,7 +294,7 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 	}
 
 	/**
-	 * Provides the the live or sandbox url, depending on testmode setting
+	 * Provides the live or sandbox url, depending on testmode setting
 	 *
 	 * @author Jonathan Davis
 	 * @since 1.1
@@ -373,6 +373,7 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 	public function form ( ShoppPurchase $Purchase ) {
 		$Shopping = ShoppShopping();
 		$Order = ShoppOrder();
+		$Cart = $Order->Cart;
 		$Customer = $Order->Customer;
 
 		$_ = array();
@@ -439,7 +440,10 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 		$_['currency_code']	= $this->currency();
 
 		// Recurring Non-Free Item
-		if ( $Order->Cart->recurring() && $Order->Cart->recurring[0]->unitprice > 0 ) {
+		$Cart->recurring();
+		$Subscription = reset($Cart->recurring);
+		if ( $Cart->recurring() && $Subscription->unitprice > 0 ) {
+
 			$tranges = array(
 				'D' => array( 'min' => 1, 'max' => 90 ),
 				'W' => array( 'min' => 1, 'max' => 52 ),
@@ -447,9 +451,7 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 				'Y' => array( 'min' => 1, 'max' => 5 ),
 			);
 
-			$Item = $Order->Cart->recurring[0];
-
-			$recurring = $Item->recurring();
+			$recurring = $Subscription->recurring();
 			$recurring['period'] = strtoupper( $recurring['period'] );
 
 			//normalize recurring interval
@@ -458,12 +460,12 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 			$_['cmd']	= '_xclick-subscriptions';
 			$_['rm']	= 2; // Return with transaction data
 
-			$_['item_number'] = $Item->product;
-			$_['item_name'] = $Item->name . ( ( ! empty( $Item->option->label ) ) ? ' (' . $Item->option->label . ')' : '' );
+			$_['item_number'] = $Subscription->product;
+			$_['item_name'] = $Subscription->name . ( ( ! empty( $Subscription->option->label ) ) ? ' (' . $Subscription->option->label . ')' : '' );
 
 			// Trial pricing
-			if ( $Item->has_trial() ) {
-				$trial = $Item->trial();
+			if ( $Subscription->has_trial() ) {
+				$trial = $Subscription->trial();
 				$trial['period'] = strtoupper($trial['period']);
 
 				// normalize trial interval
@@ -473,7 +475,7 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 				$_['p1']	= $trial['interval'];
 				$_['t1']	= $trial['period'];
 			}
-			$_['a3']	= $this->amount( $Item->subprice );
+			$_['a3']	= $this->amount( $Subscription->subprice );
 			$_['p3']	= $recurring['interval'];
 			$_['t3']	= $recurring['period'];
 
@@ -518,13 +520,14 @@ class ShoppPayPalStandard extends GatewayFramework implements GatewayModule {
 
 		$_ = apply_filters('shopp_paypal_standard_form', $_);
 
-
 		return $this->format($_);
 	}
 
 	private function process ( $event, ShoppPurchase $Purchase ) {
 
 		if ( ! $Purchase->lock() ) return false; // Only process order updates if this process can get a lock
+
+		$Message = $this->Message;
 
 		if ( in_array( $event, array( 'sale', 'auth', 'capture' ) ) ) {
 

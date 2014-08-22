@@ -65,7 +65,7 @@ class ShoppTax {
 
 		$fallbacks = array();
 		$settings = array();
-		foreach ( $taxrates as $setting ) {
+		foreach ( (array) $taxrates as $setting ) {
 
 			$defaults = array(
 				'rate' => 0,
@@ -123,7 +123,7 @@ class ShoppTax {
 
 		$settings = $this->settings();
 
-		foreach ( $settings as $key => $setting ) {
+		foreach ( (array) $settings as $key => $setting ) {
 
 			// Add any local rate to the base rate, then divide by 100 to prepare the rate to be applied
 			$rate = ( self::float($setting['rate']) + self::float($setting['localrate']) ) / 100;
@@ -337,7 +337,7 @@ class ShoppTax {
 	 * @param float $taxable The amount to calculate taxes on
 	 * @return float The total tax amount
 	 **/
-	public static function calculate ( array &$rates, float $taxable ) {
+	public static function calculate ( array &$rates, $taxable ) {
 
 		$compound = 0;
 		$total = 0;
@@ -382,7 +382,7 @@ class ShoppTax {
 	 * @param float $$amount The amount including tax
 	 * @return float The amount excluding tax
 	 **/
-	public static function exclusive ( array &$rates, float $amount ) {
+	public static function exclusive ( array &$rates, $amount ) {
 		$taxrate = 0;
 		foreach ( $rates as $tax )
 			$taxrate += $tax->rate;

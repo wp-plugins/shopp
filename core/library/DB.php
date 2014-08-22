@@ -253,9 +253,21 @@ class sDB extends SingletonFramework {
 		if ( is_array($data) ) array_map(array(__CLASS__, 'escape'), $data);
 		elseif ( is_object($data) ) {
 			foreach ( get_object_vars($data) as $p => $v )
-				$data->$p = sDB::escape($v);
-		} else $data = addslashes(stripslashes($data));
+				$data->$p = self::escape($v);
+		} else {
+			$db = sDB::get();
+			$data = self::unescape($data); // Prevent double-escapes
+			$data = $db->api->escape($data);
+		}
 		return $data;
+	}
+
+	protected static function unescape ( $data ) {
+	    return str_replace(
+			array("\\\\", "\\0", "\\n", "\\r", "\Z",   "\'", '\"'),
+			array("\\",   "\0",  "\n",  "\r",  "\x1a", "'",  '"'),
+			$data
+		);
 	}
 
 	/**
@@ -731,6 +743,7 @@ interface ShoppDBInterface {
 	public function affected ();
 	public function object ( $results = null );
 	public function free ();
+	public function escape ( $string );
 }
 
 /**
@@ -791,6 +804,10 @@ class ShoppMySQLEngine implements ShoppDBInterface {
 		return mysql_free_result($this->result);
 	}
 
+	public function escape ( $string ) {
+		return mysql_real_escape_string($string, $this->connection);
+	}
+
 }
 
 /**
@@ -849,6 +866,10 @@ class ShoppMySQLiEngine implements ShoppDBInterface {
 	public function free () {
 		if ( ! is_a($this->results, 'mysqli_result') ) return false;
 		return $this->results->free();
+	}
+
+	public function escape ( $string ) {
+		return $this->connection->real_escape_string($string);
 	}
 
 }
@@ -932,7 +953,7 @@ abstract class ShoppDatabaseObject implements Iterator {
 		// Map out the table definition into our data structure
 		foreach ( $r as $object ) {
 			$var = $object->Field;
-			if ( ! empty($map) &&  ! isset($map[ $var ]) ) continue;
+
 			$this->_datatypes[ $var ] = sDB::datatype($object->Type);
 			$this->_defaults[ $var ] = $object->Default;
 
@@ -941,6 +962,8 @@ abstract class ShoppDatabaseObject implements Iterator {
 				$values = str_replace("','", ",", substr($object->Type,strpos($object->Type,"'")+1,-2));
 				$this->_lists[$var] = explode(",",$values);
 			}
+
+			if ( ! empty($map) && ! isset($map[ $var ]) ) continue;
 
 			// Remap properties if a property map is available
 			$property = isset($map[$var])?$map[$var]:$var;

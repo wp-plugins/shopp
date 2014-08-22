@@ -2,9 +2,9 @@
 
 class TaxReport extends ShoppReportFramework implements ShoppReport {
 
-	var $periods = true;
+	public $periods = true;
 
-	function setup () {
+	public function setup () {
 		$this->setchart(array(
 			'yaxis' => array('tickFormatter' => 'asMoney')
 		));
@@ -13,7 +13,7 @@ class TaxReport extends ShoppReportFramework implements ShoppReport {
 		$this->chartseries( __('Total Tax','Shopp'), array('column' => 'tax') );
 	}
 
-	function query () {
+	public function query () {
 		extract($this->options, EXTR_SKIP);
 
 		$where = array();
@@ -31,7 +31,7 @@ class TaxReport extends ShoppReportFramework implements ShoppReport {
 							UNIX_TIMESTAMP(o.created) as period,
 							COUNT(DISTINCT o.id) AS orders,
 							SUM(o.subtotal) as subtotal,
-							( SELECT SUM(IF(p.unittax > 0,p.total,0)) FROM $purchased_table AS p WHERE o.id = p.purchase ) AS taxable,
+							SUM( (SELECT IF(p.unittax > 0,p.total,0) FROM $purchased_table AS p WHERE o.id = p.purchase) ) AS taxable,
 							( SELECT AVG(p.unittax/p.unitprice) FROM $purchased_table AS p WHERE o.id = p.purchase ) AS rate,
 							SUM(o.tax) as tax
 					FROM $orders_table AS o
@@ -41,7 +41,7 @@ class TaxReport extends ShoppReportFramework implements ShoppReport {
 		return $query;
 	}
 
-	function columns () {
+	public function columns () {
 		return array(
 			'period'   => Shopp::__('Period'),
 			'orders'   => Shopp::__('Orders'),
@@ -52,14 +52,14 @@ class TaxReport extends ShoppReportFramework implements ShoppReport {
 		);
 	}
 
-	static function orders ( $data ) { return intval($data->orders); }
+	public static function orders ( $data ) { return intval($data->orders); }
 
-	static function subtotal ( $data ) { return money($data->subtotal); }
+	public static function subtotal ( $data ) { return money($data->subtotal); }
 
-	static function taxable ( $data ) { return money($data->taxable); }
+	public static function taxable ( $data ) { return money($data->taxable); }
 
-	static function tax ( $data ) { return money($data->tax); }
+	public static function tax ( $data ) { return money($data->tax); }
 
-	static function rate ( $data ) { return percentage($data->rate * 100); }
+	public static function rate ( $data ) { return percentage($data->rate * 100); }
 
 }

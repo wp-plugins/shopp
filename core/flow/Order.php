@@ -258,7 +258,6 @@ class ShoppOrder {
 		));
 	}
 
-
 	/**
 	 * Fires an unstock order event for a purchase to deduct stock from inventory
 	 *
@@ -274,10 +273,9 @@ class ShoppOrder {
 		if ( ! isset($Purchase->id) || empty($Purchase->id) || $Event->order != $Purchase->id )
 			$Purchase = new ShoppPurchase($Event->order);
 
-		if ( ! isset($Purchase->events) || empty($Purchase->events) ) $Purchase->load_events(); // Load events
-		if ( in_array('unstock', array_keys($Purchase->events)) ) return true; // Unstock already occurred, do nothing
+		if ( $Purchase->did('unstock') ) return true; // Unstock already occurred, do nothing
 
-		$Purchase->load_purchased(); // Reload purchased to esnure we have inventory status
+		$Purchase->load_purchased(); // Reload purchased to ensure we have inventory status
 		if ( ! $Purchase->stocked ) return false;
 
 		shopp_add_order_event($Purchase->id, 'unstock');
@@ -462,7 +460,7 @@ class ShoppOrder {
 		$Purchase->customer = $this->Customer->id;
 		$Purchase->taxing = shopp_setting_enabled('tax_inclusive') ? 'inclusive' : 'exclusive';
 		$Purchase->freight = $this->Cart->total('shipping');
-		$Purchase->shipoption = $shipoption->name;
+		$Purchase->shipoption = isset($shipoption->name) ? $shipoption->name : '';
 		$Purchase->ip = $Shopping->ip;
 		$Purchase->created = current_time('mysql');
 		unset($Purchase->order);

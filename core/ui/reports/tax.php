@@ -18,8 +18,7 @@ class TaxReport extends ShoppReportFramework implements ShoppReport {
 
 		$where = array();
 
-		$where[] = "$starts < " . self::unixtime('o.created');
-		$where[] = "$ends > " . self::unixtime('o.created');
+		$where[] = "o.created BETWEEN '" . sDB::mkdatetime($starts) . "' AND '" . sDB::mkdatetime($ends) . "'";
 		$where[] = "o.txnstatus IN ('authed', 'captured', 'CHARGED')";
 
 		$where = join(" AND ",$where);
@@ -31,7 +30,7 @@ class TaxReport extends ShoppReportFramework implements ShoppReport {
 							UNIX_TIMESTAMP(o.created) as period,
 							COUNT(DISTINCT o.id) AS orders,
 							SUM(o.subtotal) as subtotal,
-							SUM( (SELECT IF(p.unittax > 0,p.total,0) FROM $purchased_table AS p WHERE o.id = p.purchase) ) AS taxable,
+							( SELECT SUM(IF(p.unittax > 0,p.total,0)) FROM $purchased_table AS p WHERE o.id = p.purchase ) AS taxable,
 							( SELECT AVG(p.unittax/p.unitprice) FROM $purchased_table AS p WHERE o.id = p.purchase ) AS rate,
 							SUM(o.tax) as tax
 					FROM $orders_table AS o

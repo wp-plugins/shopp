@@ -269,6 +269,8 @@ class ShoppProduct extends WPShoppObject {
 			sDB::query("SELECT * FROM $table WHERE context='product' AND type != 'image' AND parent IN ($ids) ORDER BY sortorder", 'array', array($this, 'metasetloader'), 'parent', 'metatype', 'name', false);
 			sDB::query("SELECT * FROM $table WHERE context='product' AND type = 'image' AND parent IN ($ids) ORDER BY $imagesort", 'array', array($this, 'metasetloader'), 'parent', 'metatype', 'name', false);
 		}
+
+		do_action('shopp_product_load_meta', $ids, $this);
 	}
 
 	/**
@@ -1157,6 +1159,7 @@ class ShoppProduct extends WPShoppObject {
 		// Duplicate summary (primarily for summary settings data)
 		$Summary = new ProductSummary($original);
 		$Summary->product = $this->id;
+		$Summary->sold = $Summary->grossed = $Summary->stock = 0;
 		$Summary->save();
 
 		// Re-summarize product pricing

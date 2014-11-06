@@ -439,7 +439,6 @@ class ShoppStorefront extends ShoppFlowController {
 		if ( ! is_shopp_collection() ) return $template;
 
 		$Page = new ShoppCollectionPage();
-		$Page->poststub();
 
 		return locate_template( $Page->templates() );
 	}
@@ -733,7 +732,7 @@ class ShoppStorefront extends ShoppFlowController {
 			$script .= "\t".join("\t\n",$this->behaviors) . "\n";
 			$script .= '});' . "\n";
 		}
-		shopp_custom_script('catalog', $script);
+		shopp_custom_script('shopp', $script);
 	}
 
 	/**

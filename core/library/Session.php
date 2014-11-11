@@ -148,7 +148,11 @@ abstract class ShoppSessionFramework {
 		$query = "SELECT * FROM $this->_table WHERE session='$session'";
 		$loaded = sDB::query($query, 'object');
 
-		if ( empty($loaded) ) return false;
+		if ( empty($loaded) ) {
+			if ( ! empty($this->session) )
+				$this->create($this->session); // Recreate sessions for pre-existing session cookies
+			return false;
+		}
 
 		$this->decrypt($loaded->data);
 		if ( empty($loaded->data) ) return false;
@@ -159,7 +163,7 @@ abstract class ShoppSessionFramework {
 		$this->stash = $loaded->stash;
 		$this->created = sDB::mktime($loaded->created);
 		$this->modified = sDB::mktime($loaded->modified);
-		shopp_debug(__METHOD__);
+
 		do_action('shopp_session_loaded');
 
 		return true;
@@ -223,7 +227,6 @@ abstract class ShoppSessionFramework {
 		$query = "UPDATE $this->_table SET ip='$this->ip',stash='$this->stash',data='$data',modified='$now' WHERE session='$this->session'";
 
 		$result = sDB::query($query);
-		shopp_debug(__METHOD__);
 
 		if ( ! $result )
 			trigger_error("Could not save session updates to the database.");
@@ -438,9 +441,10 @@ abstract class ShoppSessionFramework {
 	    $entropy .= uniqid(mt_rand(), true);
 
 		// Try adding entropy from the Unix random number generator
-	    if ( is_readable('/dev/urandom') ) {
-	        $h = fopen('/dev/urandom', 'rb');
-	        $entropy .= fread($h, 64);
+	    if ( is_readable('/dev/urandom') && $h = fopen('/dev/urandom', 'rb') ) {
+			if ( function_exists('stream_set_read_buffer') )
+				stream_set_read_buffer($h, 0);
+	        $entropy .= @fread($h, 64);
 	        fclose($h);
 	    }
 

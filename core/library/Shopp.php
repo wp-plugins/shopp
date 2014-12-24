@@ -161,14 +161,7 @@ final class Shopp extends ShoppCore {
 		// This should only run once
 		if ( defined( 'SHOPP_PATH' ) ) return;
 
-		global $plugin, $mu_plugin, $network_plugin;
-
-		if ( isset($plugin) ) $filepath = $plugin;
-		elseif ( isset($mu_plugin) ) $filepath = $mu_plugin;
-		elseif ( isset($network_plugin) ) $filepath = $network_plugin;
-
-		if ( false === strpos($filepath, WP_PLUGIN_DIR) )
-			$filepath = WP_PLUGIN_DIR . "/$filepath";
+		$filepath = dirname(ShoppLoader::basepath()) . "/Shopp.php";
 
 		$path = sanitize_path(dirname($filepath));
 		$file = basename($filepath);
@@ -361,7 +354,7 @@ final class Shopp extends ShoppCore {
 	 **/
 	public function queryvars ($vars) {
 
-		$vars[] = 's_iid';			// Shopp image id
+		$vars[] = 'siid';			// Shopp image id
 		$vars[] = 's_cs';			// Catalog (search) flag
 		$vars[] = 's_ff';			// Category filters
 		$vars[] = 'src';			// Shopp resource

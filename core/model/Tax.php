@@ -120,6 +120,7 @@ class ShoppTax {
 	public function rates ( array &$rates, ShoppTaxableItem $Item = null  ) {
 
 		if ( isset($Item) ) $this->Item = $Item;
+		if ( ! is_array($rates) ) $rates = array();
 
 		$settings = $this->settings();
 
@@ -142,7 +143,7 @@ class ShoppTax {
 		}
 
 		// get list of existing rates that no longer match
-		$unapply = array_keys(array_diff_key($rates, $settings));
+		$unapply = array_keys(array_diff_key($rates, (array) $settings));
 		foreach ( $unapply as $key )
 			$rates[ $key ]->amount = $rates[ $key ]->total = null;
 

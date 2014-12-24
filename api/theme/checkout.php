@@ -281,13 +281,14 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * @return string The generated markup or value
 	 **/
 	public static function billing_card_expires_mm ( $result, $options, $O ) {
-
+		$select_attrs = array( 'title', 'class', 'disabled', 'required', 'tabindex', 'accesskey', 'placeholder' );
 		$name = 'billing[cardexpires-mm]';
 		$id = 'billing-cardexpires-mm';
 
 		$defaults = array(
 			'mode' => 'input',
 			'class' => 'paycard',
+			'required' => true,
 			'autocomplete' => 'off',
 			'type' => 'menu',
 			'value' => $O->Billing->cardexpires > 0 ? date("m",$O->Billing->cardexpires) : '',
@@ -302,7 +303,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 		$months = array('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12');
 
 		$menu = array();
-		$menu[] = '<select name="' . $name . '" id="' . $id . '">';
+		$menu[] = '<select name="' . $name . '" id="' . $id . '" ' . inputattrs($options, $select_attrs) . '>';
 		$menu[] = '<option></option>';
 		$menu[] = menuoptions($months, $options['value']);
 		$menu[] = '</select>';
@@ -343,13 +344,14 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * @return string The generated markup or value
 	 **/
 	public static function billing_card_expires_yy ( $result, $options, $O ) {
-
+		$select_attrs = array( 'title', 'class', 'disabled', 'required', 'tabindex', 'accesskey', 'placeholder' );
 		$name = 'billing[cardexpires-yy]';
 		$id = 'billing-cardexpires-yy';
 
 		$defaults = array(
 			'mode' => 'input',
 			'class' => 'paycard',
+			'required' => true,
 			'autocomplete' => 'off',
 			'type' => 'menu',
 			'value' => $O->Billing->cardexpires > 0 ? date('y', $O->Billing->cardexpires) : '',
@@ -357,7 +359,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 		);
 		$options = array_merge($defaults, $options);
 
-		if ( 'value' == $options['mode'] ) return date('m', $O->Billing->cardexpires);
+		if ( 'value' == $options['mode'] ) return date('y', $O->Billing->cardexpires);
 
 		if ( 'text' == $options['type'] )
 			return '<input type="text" name="' . $name . '" id="' . $id . '" ' . inputattrs($options) . ' />';
@@ -367,7 +369,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 		$years = array_map( create_function('$n','return sprintf("%02d", $n);'), range((int)$thisyear, (int)$thisyear + $options['max'] ) );
 
 		$menu = array();
-		$menu[] = '<select name="' . $name . '" id="' . $id . '">';
+		$menu[] = '<select name="' . $name . '" id="' . $id . '" ' . inputattrs($options, $select_attrs) . '>';
 		$menu[] = '<option></option>';
 		$menu[] = menuoptions($years, $options['value']);
 		$menu[] = '</select>';
@@ -438,7 +440,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * @return string The generated markup or value
 	 **/
 	public static function billing_card_type ( $result, $options, $O ) {
-		$select_attrs = array('title', 'required', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
+		$select_attrs = array('title', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
 
 		if ( ! isset($options['mode']) ) $options['mode'] = 'input';
 		if ( 'value' == $options['mode'] ) return $O->Billing->cardtype;
@@ -501,6 +503,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 **/
 	public static function billing_cvv ( $result, $options, $O ) {
 		if ( ! isset($options['autocomplete']) ) $options['autocomplete'] = 'off';
+		if ( ! isset($options['required']) ) $options['required'] = true;
 		if ( ! empty($_POST['billing']['cvv']) )
 			$options['value'] = $_POST['billing']['cvv'];
 		$options['class'] = isset($options['class']) ? $options['class'] . ' paycard' : 'paycard';
@@ -529,7 +532,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	public static function billing_locale ( $result, $options, $O ) {
 		$Shopp = Shopp::object();
 
-		$select_attrs = array('title', 'required', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
+		$select_attrs = array('title', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
 		$output = false;
 
 		$defaults = array(
@@ -784,19 +787,19 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * - **disabled**: Specifies that an `<input>` element should be disabled
 	 * - **tabindex**: Specifies the tabbing order of an element
 	 * - **title**: Specifies extra information about an element
-	 * - **value**: `Confirm Order` Specifies the value of an `<input>` element
+	 * - **label**: `Confirm Order` Specifies the label of the button element
 	 * - **errorlabel**: `Return to Checkout` The label to use when an error occurs to prompt the shopper to return to the checkout page
 	 * @param ShoppOrder $O       The working object
 	 * @return string The confirm order button markup
 	 **/
 	public static function confirm_button ( $result, $options, $O ) {
-		$submit_attrs = array('title', 'class', 'value', 'disabled', 'tabindex', 'accesskey');
+		$submit_attrs = array('title', 'class', 'label', 'value', 'disabled', 'tabindex', 'accesskey');
 
 		if ( empty($options['errorlabel']) )
 			$options['errorlabel'] = Shopp::__('Return to Checkout');
 
-		if ( empty($options['value']) )
-			$options['value'] = Shopp::__('Confirm Order');
+		if ( empty($options['label']) )
+			$options['label'] = Shopp::__('Confirm Order');
 
 		$checkouturl = Shopp::url(false, 'checkout', $O->security());
 
@@ -908,7 +911,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 
 		/// Allowable attributes for textarea inputs
 		$textarea_attrs = array('accesskey', 'title', 'tabindex', 'class', 'disabled', 'required');
-		$select_attrs = array( 'title', 'required', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey', 'placeholder' );
+		$select_attrs = array( 'title', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey', 'placeholder' );
 
 		if ( ! $name ) {// Iterator for customer info fields
 			if ( ! isset($O->_customer_info_loop) ) {
@@ -1204,7 +1207,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * @return string The custom order data field markup
 	 **/
 	public static function order_data ( $result, $options, $O ) {
-		$select_attrs = array('title', 'required', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
+		$select_attrs = array('title', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
 		$defaults = array(
 			'name' => false, // REQUIRED
 			'data' => false,
@@ -1263,7 +1266,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 				return '<textarea name="data['.$name.']" cols="'.$cols.'" rows="'.$rows.'" id="'.$id.'" '.inputattrs($op,$textarea_attrs).'>'.$value.'</textarea>';
 				break;
 			case "menu":
-				$menuvalues = true;			
+				$menuvalues = true;
 				if ( is_string($options) ) {
 					$menuvalues = false;
 					$options = explode(',',$options);
@@ -1376,7 +1379,7 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * @return void
 	 **/
 	public static function payoptions ( $result, $options, $O ) {
-		$select_attrs = array('title', 'required', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
+		$select_attrs = array('title', 'class', 'disabled', 'required', 'size', 'tabindex', 'accesskey');
 
 		if ( $O->Cart->orderisfree() ) return false;
 		$Payments = $O->Payments;
@@ -1601,16 +1604,16 @@ class ShoppCheckoutThemeAPI implements ShoppAPI {
 	 * - **disabled**: Specifies that an `<input>` element should be disabled
 	 * - **tabindex**: Specifies the tabbing order of an element
 	 * - **title**: Specifies extra information about an element
-	 * - **value**: `Submit Order` Specifies the label of the submit button element
+	 * - **label**: `Submit Order` Specifies the label of the submit button element
 	 * - **wrapclass**: The class attribute for the submit button `<span>` wrapper
 	 * @param ShoppOrder $O       The working object
 	 * @return string The submit button markup
 	 **/
 	public static function submit ( $result, $options, $O ) {
-		$submit_attrs = array('title', 'class', 'value', 'disabled', 'tabindex', 'accesskey');
+		$submit_attrs = array('title', 'class', 'label', 'value', 'disabled', 'tabindex', 'accesskey');
 
-		if ( ! isset($options['value']) )
-			$options['value'] = Shopp::__('Submit Order');
+		if ( ! isset($options['label']) )
+			$options['label'] = Shopp::__('Submit Order');
 
 		$options['class'] = isset($options['class']) ? $options['class'] . ' checkout-button' : 'checkout-button';
 

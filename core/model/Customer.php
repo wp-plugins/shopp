@@ -422,6 +422,8 @@ class ShoppCustomer extends ShoppDatabaseObject {
 	public function profile () {
 		if ( empty($_POST['customer']) ) return; // Not a valid customer profile update request
 
+		check_admin_referer('shopp_profile_update');
+
 		$defaults = array(
 			'phone' => '',
 			'password' => null,
@@ -473,6 +475,9 @@ class ShoppCustomer extends ShoppDatabaseObject {
 		}
 
 		$this->updated(self::PROFILE, true);
+
+		if ( $this->_password_change )
+			Shopp::redirect(Shopp::url(false, 'account'));
 
 	}
 
